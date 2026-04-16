@@ -58,61 +58,37 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
             await typeLikeHuman(textarea, item.description);
         }
 
-        console.log("Automation Complete");
-        sendResponse({ status: "Complete" });
-
-        // 8. Click Next button when enabled, then Publish button
-        const clickButtonByLabel = (label) => {
-            const buttons = Array.from(document.querySelectorAll('[role="button"]'));
-            const button = buttons.find(btn => btn.innerText.includes(label) || btn.getAttribute('aria-label') === label);
+        // 8. Handle Next and Publish buttons
+        const clickButton = async (label) => {
+            console.log(`Waiting for ${label} button...`);
             
-            if (button) {
-                const isDisabled = button.getAttribute('aria-disabled') === 'true';
-                if (!isDisabled) {
-                    console.log(`${label} button found and enabled, clicking forcefully...`);
-                    button.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-                    button.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-                    button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-                    return true;
+            // Wait for button to exist and be enabled
+            for (let i = 0; i < 50; i++) { // Max 25 seconds
+                const buttons = Array.from(document.querySelectorAll('[role="button"]'));
+                const button = buttons.find(btn => btn.innerText.includes(label) || btn.getAttribute('aria-label') === label);
+                
+                if (button) {
+                    const isDisabled = button.getAttribute('aria-disabled') === 'true';
+                    if (!isDisabled) {
+                        console.log(`${label} button found and enabled, clicking...`);
+                        button.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                        button.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                        button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                        return true;
+                    }
                 }
+                await sleep(500);
             }
+            console.log(`${label} button not found or not enabled.`);
             return false;
         };
 
-        // Click Next, then wait for Publish to appear and click it
-        if (!clickButtonByLabel('Next')) {
-            console.log('Next button not enabled, observing...');
-            const observer = new MutationObserver((mutations, obs) => {
-                if (clickButtonByLabel('Next')) {
-                    obs.disconnect();
-                    // Wait for the UI to transition, then look for Publish
-                    setTimeout(() => {
-                        if (!clickButtonByLabel('Publish')) {
-                            const publishObserver = new MutationObserver((m, o) => {
-                                if (clickButtonByLabel('Publish')) {
-                                    o.disconnect();
-                                }
-                            });
-                            publishObserver.observe(document.body, { childList: true, subtree: true });
-                        }
-                    }, 1000);
-                }
-            });
-            observer.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['aria-disabled'] });
-            setTimeout(() => observer.disconnect(), 30000);
-        } else {
-            // Already clicked next, wait for publish
-            setTimeout(() => {
-                if (!clickButtonByLabel('Publish')) {
-                    const publishObserver = new MutationObserver((m, o) => {
-                        if (clickButtonByLabel('Publish')) {
-                            o.disconnect();
-                        }
-                    });
-                    publishObserver.observe(document.body, { childList: true, subtree: true });
-                }
-            }, 1000);
-        }
+        await clickButton('Next');
+        await sleep(1000);
+        await clickButton('Publish');
+
+        console.log("Automation Complete");
+        sendResponse({ status: "Complete" });
     }
     return true;
 });
