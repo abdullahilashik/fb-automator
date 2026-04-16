@@ -58,8 +58,7 @@ export const handleAutosuggestDropdown = async (locationText) => {
         return [];
     };
 
-    let options = findSuggestions();
-    console.log('Location - suggestions found:', options.length);
+    let options = findSuggestions();    
 
     // If no suggestions, try shorter text
     let currentText = locationText;
@@ -71,26 +70,30 @@ export const handleAutosuggestDropdown = async (locationText) => {
         options = findSuggestions();
     }
 
-    // If we found suggestions, select via keyboard
+    // If we found suggestions, select
     if (options.length > 0) {
         const firstOpt = options[0];
-        console.log('Selecting option via keyboard:', firstOpt.textContent?.trim().substring(0, 30));
+        const targetSpan = firstOpt.querySelector('span') || firstOpt;
+        const optText = firstOpt.textContent?.trim();
+        console.log('Clicking option span:', optText?.substring(0, 30));
         
-        input.focus();
-        // Send ArrowDown to highlight
-        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true, cancelable: true }));
-        await sleep(300);
+        // Ensure the menu container is visible and active
+        const listbox = firstOpt.closest('[role="listbox"]');
+        if (listbox) {
+            listbox.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+        }
+
+        // Force a sequence of events directly on the span
+        targetSpan.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true, view: window }));
+        targetSpan.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+        targetSpan.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+        targetSpan.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
         
-        // Try Tab to accept the selection (common in FB/React forms)
-        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', code: 'Tab', keyCode: 9, bubbles: true, cancelable: true }));
+        await sleep(1000); // Wait longer to ensure React processes the click
         
-        // Also send Enter just in case
-        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true }));
-        
-        // Sometimes need to trigger an input event to let React know
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-        
+        // Remove manual input.value assignment to let React handle it naturally
+        input.blur(); // Trigger final validation
+
         await sleep(500);
     } else {
         // Try Tab to move away (might accept selection)
