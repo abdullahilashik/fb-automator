@@ -23,3 +23,7 @@ Exterior colour (Dropdown)
 Interior colour (Dropdown)
 
 This vehicle has a clean title. (Checkbox)
+
+
+
+When published you should be navigated to another page, it's url is something like 'https://www.facebook.com/marketplace/you/selling' . when you see this that means the listing is published. Give it a while, a wait for 15 seconds, (display in frontend with a countdown). After the countdown finished navigate to this url, "https://www.facebook.com/marketplace/create/vehicle"
