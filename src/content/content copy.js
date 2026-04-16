@@ -5,11 +5,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 // Find the label wrapper by checking all spans for matching text
 const findLabelByText = (text) => {
     const spans = Array.from(document.querySelectorAll('span'));
-    // Try exact match first
-    let target = spans.find(s => s.textContent.trim().toLowerCase() === text.toLowerCase());
-    if (target) return target.closest('label');
-    // Try partial match
-    target = spans.find(s => s.textContent.trim().toLowerCase().includes(text.toLowerCase()));
+    const target = spans.find(s => s.textContent.trim().toLowerCase() === text.toLowerCase());
     return target?.closest('label') || null;
 };
 
@@ -64,18 +60,6 @@ const handleLocation = async (locationText) => {
     }
 };
 
-// Handle Checkbox (Clean Title)
-const handleCheckbox = async (labelText) => {
-    const spans = Array.from(document.querySelectorAll('span'));
-    const target = spans.find(s => s.textContent.trim().toLowerCase().includes(labelText.toLowerCase()));
-    const label = target?.closest('label');
-    const input = label?.querySelector('input[type="checkbox"]');
-    if (input && !input.checked) {
-        input.click();
-        await sleep(300);
-    }
-};
-
 // Handle Photo Uploads (via DataTransfer)
 const handlePhotos = async (urls) => {
     if (!urls || urls.length === 0) return;
@@ -126,8 +110,6 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
             if (input) {
                 await typeLikeHuman(input, field.value);
                 await sleep(500);
-            } else {
-                console.log(`Input not found: ${field.label}`);
             }
         }
 
@@ -137,22 +119,13 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         await handleDropdown('Transmission', item.transmission);
         await handleDropdown('Body style', item.bodyStyle);
         await handleDropdown('Vehicle condition', item.condition);
-        await handleDropdown('Exterior colour', item.exteriorColour);
-        await handleDropdown('Interior colour', item.interiorColour);
 
-        // 6. Clean Title Checkbox
-        await handleCheckbox('clean title');
-
-        // 7. Description (Textarea)
+        // 6. Description (Textarea)
         const descContainer = findLabelByText('Description');
         const textarea = descContainer?.querySelector('textarea');
         if (textarea) {
             await typeLikeHuman(textarea, item.description);
         }
-
-        // 8. Click outside to close any open dropdowns
-        document.body.click();
-        await sleep(200);
 
         console.log("Automation Complete");
         sendResponse({ status: "Complete" });

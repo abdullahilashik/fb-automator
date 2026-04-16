@@ -4,9 +4,9 @@ import { PlayCircle, Car } from "lucide-react";
 const Popup = () => {
   // Static Data for testing all fields
   const testData = {
-    vehicleType: "Car/Truck",
-    imageUrls: ["https://picsum.photos/800/600"], // Example image
-    location: "New York, New York",
+    vehicleType: "Car/van",
+    imageUrls: ["https://picsum.photos/800/600"],
+    location: "Sydney, New South Wales, Australia",
     year: "2021",
     make: "Ford",
     model: "F-150",
@@ -14,9 +14,12 @@ const Popup = () => {
     price: "45000",
     fuelType: "Petrol",
     transmission: "Automatic transmission",
-    description: "Excellent condition, one owner, smoke-free.",
-    bodyStyle: "Pickup Truck",
+    bodyStyle: "Van",
     condition: "Excellent",
+    exteriorColour: "Black",
+    interiorColour: "Black",
+    cleanTitle: true,
+    description: "Excellent condition, one owner, smoke-free. Never been in an accident. Regular service history.",
   };
 
   const startAutomation = () => {
@@ -38,10 +41,11 @@ const Popup = () => {
       <div className="space-y-3">
         <div className="bg-gray-50 p-3 rounded border border-gray-200 text-[11px] font-mono text-gray-600">
           <p>
-            Target: {testData.make} {testData.model}
+            Target: {testData.year} {testData.make} {testData.model}
           </p>
           <p>Location: {testData.location}</p>
-          <p>Fields: 13 Total</p>
+          <p>Price: ${testData.price}</p>
+          <p>Fields: 16 Total</p>
         </div>
 
         <button
