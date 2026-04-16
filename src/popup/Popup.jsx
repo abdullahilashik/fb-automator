@@ -6,7 +6,7 @@ const Popup = () => {
   const testData = {
     vehicleType: "Car/van",
     imageUrls: ["https://picsum.photos/800/600"],
-    location: "Sydney, New South Wales, Australia",
+    location: "Dhaka",
     year: "2021",
     make: "Ford",
     model: "F-150",

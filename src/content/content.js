@@ -17,7 +17,8 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
 
         // 3. Location
         await handleAutosuggestDropdown(item.location);
-        // await handleLocation(item.location);        
+        // await handleLocation(item.location);     
+        
 
         // 4. Basic Info (Inputs)
         const inputs = [

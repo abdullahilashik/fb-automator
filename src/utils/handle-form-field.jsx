@@ -23,24 +23,79 @@ export const handleDropdown = async (labelName, optionText) => {
 };
 
 // handle location dropdown
-
 export const handleAutosuggestDropdown = async (locationText) => {
     if (!locationText) return;
     const label = findLabelByText('Location');
     const input = label?.querySelector('input');
     if (!input) return;
 
-    await typeLikeHuman(input, locationText);
-    await sleep(1500); // Wait for FB to fetch suggestions
+    // Type the full location character by character
+    input.focus();
+    input.value = "";
+    for (let i = 0; i < locationText.length; i++) {
+        input.value = locationText.substring(0, i + 1);
+        input.dispatchEvent(new InputEvent('input', { bubbles: true, data: locationText[i] }));
+        await sleep(Math.random() * 50 + 30);
+    }
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    
+    // Wait for the listbox to appear
+    await sleep(1500);
 
-    // Look for the first suggestion in the popup menu
-    const firstSuggestion = document.querySelector('[role="option"]'); // skip the ul; [role="listbox"],
-    console.log('Location suggest: ', firstSuggestion);
-    if (firstSuggestion) {
-        firstSuggestion.setAttribute('aria-selected', 'true'); // set selected attribute as true
-        // firstSuggestion.click(); // get the first li
-        firstSuggestion.dispatchEvent(new Event('click', {bubbles: true}));
+    // Function to find suggestions
+    const findSuggestions = () => {
+        // Try various selectors
+        const selectors = [
+            '[role="listbox"] > [role="option"]',
+            '[role="listbox"] [role="option"]',
+            '[aria-expanded="true"] [role="option"]',
+            'div[role="listbox"] div[role="option"]'
+        ];
+        for (const sel of selectors) {
+            const opts = document.querySelectorAll(sel);
+            if (opts.length > 0) return Array.from(opts);
+        }
+        return [];
+    };
+
+    let options = findSuggestions();
+    console.log('Location - suggestions found:', options.length);
+
+    // If no suggestions, try shorter text
+    let currentText = locationText;
+    while (options.length === 0 && currentText.length > 2) {
+        currentText = currentText.slice(0, -1);
+        input.value = currentText;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
         await sleep(1000);
+        options = findSuggestions();
+    }
+
+    // If we found suggestions, select via keyboard
+    if (options.length > 0) {
+        const firstOpt = options[0];
+        console.log('Selecting option via keyboard:', firstOpt.textContent?.trim().substring(0, 30));
+        
+        input.focus();
+        // Send ArrowDown to highlight
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, bubbles: true, cancelable: true }));
+        await sleep(300);
+        
+        // Try Tab to accept the selection (common in FB/React forms)
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', code: 'Tab', keyCode: 9, bubbles: true, cancelable: true }));
+        
+        // Also send Enter just in case
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true }));
+        
+        // Sometimes need to trigger an input event to let React know
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        
+        await sleep(500);
+    } else {
+        // Try Tab to move away (might accept selection)
+        input.blur();
+        await sleep(300);
     }
 };
 
