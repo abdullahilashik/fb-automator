@@ -1,5 +1,5 @@
 import { findLabelByText } from "../utils/find-label-by";
-import { handleCheckbox, handleDropdown, handleLocation, handlePhotos } from "../utils/handle-form-field";
+import { handleAutosuggestDropdown, handleCheckbox, handleDropdown, handleLocation, handlePhotos } from "../utils/handle-form-field";
 import {typeLikeHuman} from '../utils/input-simulation';
 import {sleep} from '../utils/sleep';
 
@@ -16,7 +16,8 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         await handlePhotos(item.imageUrls);
 
         // 3. Location
-        await handleLocation(item.location);
+        await handleAutosuggestDropdown(item.location);
+        // await handleLocation(item.location);        
 
         // 4. Basic Info (Inputs)
         const inputs = [

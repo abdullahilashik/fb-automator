@@ -22,6 +22,28 @@ export const handleDropdown = async (labelName, optionText) => {
     }
 };
 
+// handle location dropdown
+
+export const handleAutosuggestDropdown = async (locationText) => {
+    if (!locationText) return;
+    const label = findLabelByText('Location');
+    const input = label?.querySelector('input');
+    if (!input) return;
+
+    await typeLikeHuman(input, locationText);
+    await sleep(1500); // Wait for FB to fetch suggestions
+
+    // Look for the first suggestion in the popup menu
+    const firstSuggestion = document.querySelector('[role="option"]'); // skip the ul; [role="listbox"],
+    console.log('Location suggest: ', firstSuggestion);
+    if (firstSuggestion) {
+        firstSuggestion.setAttribute('aria-selected', 'true'); // set selected attribute as true
+        // firstSuggestion.click(); // get the first li
+        firstSuggestion.dispatchEvent(new Event('click', {bubbles: true}));
+        await sleep(1000);
+    }
+};
+
 // Handle Location (Typing + Clicking first suggestion)
 export const handleLocation = async (locationText) => {
     if (!locationText) return;
