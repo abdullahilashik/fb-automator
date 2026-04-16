@@ -4,12 +4,8 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 // Find the label wrapper by checking all spans for matching text
 const findLabelByText = (text) => {
-    const spans = Array.from(document.querySelectorAll('span'));
-    // Try exact match first
-    let target = spans.find(s => s.textContent.trim().toLowerCase() === text.toLowerCase());
-    if (target) return target.closest('label');
-    // Try partial match
-    target = spans.find(s => s.textContent.trim().toLowerCase().includes(text.toLowerCase()));
+    const spans = Array.from(document.querySelectorAll('label div span'));
+    const target = spans.find(s => s.textContent.trim().toLowerCase() === text.toLowerCase());
     return target?.closest('label') || null;
 };
 
@@ -149,10 +145,6 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         if (textarea) {
             await typeLikeHuman(textarea, item.description);
         }
-
-        // 8. Click outside to close any open dropdowns
-        document.body.click();
-        await sleep(200);
 
         console.log("Automation Complete");
         sendResponse({ status: "Complete" });
