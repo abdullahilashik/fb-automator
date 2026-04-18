@@ -3,30 +3,62 @@ import { PlayCircle, Car, Settings, CheckCircle } from "lucide-react";
 
 const Popup = () => {
   // Static Data for testing
-  const testData = {
-    vehicleType: "Car/van",
-    imageUrls: ["https://picsum.photos/800/600"],
-    location: "Sydney, New South Wales, Australia",
-    year: "2021",
-    make: "Ford",
-    model: "F-150",
-    mileage: "25000",
-    price: "45000",
-    fuelType: "Petrol",
-    transmission: "Automatic transmission",
-    bodyStyle: "Pickup Truck",
-    condition: "Excellent",
-    exteriorColour: "Black",
-    interiorColour: "Black",
-    cleanTitle: true,
-    description: "Excellent condition, one owner, smoke-free.",
-  };
+  const testData = [
+    {
+      id: 1,
+      vehicleType: "Car/van",
+      imageUrls: ["https://picsum.photos/800/600"],
+      location: "Sydney, New South Wales, Australia",
+      year: "2021",
+      make: "Ford",
+      model: "F-150",
+      mileage: "25000",
+      price: "45000",
+      fuelType: "Petrol",
+      transmission: "Automatic transmission",
+      bodyStyle: "Van",
+      condition: "Excellent",
+      exteriorColour: "Black",
+      interiorColour: "Black",
+      cleanTitle: true,
+      description: "Excellent condition, one owner, smoke-free.",
+    },
+    {
+      id: 2,
+      vehicleType: "Car/van",
+      imageUrls: ["https://picsum.photos/800/600"],
+      location: "Melbourne, Victoria, Australia",
+      year: "2022",
+      make: "Toyota",
+      model: "Camry",
+      mileage: "15000",
+      price: "35000",
+      fuelType: "Hybrid",
+      transmission: "Automatic transmission",
+      bodyStyle: "Van",
+      condition: "Like new",
+      exteriorColour: "White",
+      interiorColour: "Grey",
+      cleanTitle: true,
+      description: "Great car, fuel efficient, low mileage.",
+    },
+  ];
 
   const startAutomation = () => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      chrome.tabs.sendMessage(tabs[0].id, {
-        action: "START_AUTOMATION",
-        payload: testData,
+    // 1. Save data to storage
+    chrome.storage.local.set({ items: testData, currentIndex: 0, results: [] }, () => {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tab = tabs[0];
+        const targetUrl = "https://www.facebook.com/marketplace/create/vehicle";
+        
+        if (tab.url.startsWith("https://www.facebook.com/marketplace/create/")) {
+            // Already on the right page, send message to trigger runAutomation()
+            chrome.tabs.sendMessage(tab.id, { action: "START_AUTOMATION" });
+        } else {
+            // Navigate to the creation page
+            chrome.tabs.update(tab.id, { url: targetUrl });
+        }
+        window.close(); // Close popup
       });
     });
   };
@@ -45,9 +77,9 @@ const Popup = () => {
         <div className="mb-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
           <h2 className="text-sm font-semibold text-gray-700 mb-2">Item Preview</h2>
           <div className="grid grid-cols-2 gap-2 text-[12px] font-mono text-gray-600">
-            <div className="bg-white p-1 rounded border border-gray-100">Make: {testData.make}</div>
-            <div className="bg-white p-1 rounded border border-gray-100">Model: {testData.model}</div>
-            <div className="bg-white p-1 rounded border border-gray-100 col-span-2">Loc: {testData.location.substring(0, 30)}...</div>
+            <div className="bg-white p-1 rounded border border-gray-100">Make: {testData[0].make}</div>
+            <div className="bg-white p-1 rounded border border-gray-100">Model: {testData[0].model}</div>
+            <div className="bg-white p-1 rounded border border-gray-100 col-span-2">Loc: {testData[0].location.substring(0, 30)}...</div>
           </div>
         </div>
 
