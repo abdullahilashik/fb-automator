@@ -122,10 +122,11 @@ export const handleLocation = async (locationText) => {
 
 // Handle Checkbox (Clean Title)
 export const handleCheckbox = async (labelText) => {
-    const spans = Array.from(document.querySelectorAll('span'));
-    const target = spans.find(s => s.textContent.trim().toLowerCase().includes(labelText.toLowerCase()));
-    const label = target?.closest('label');
-    const input = label?.querySelector('input[type="checkbox"]');
+    // const spans = Array.from(document.querySelectorAll('span'));
+    // const target = spans.find(s => s.textContent.trim().toLowerCase().includes(labelText.toLowerCase()));
+    // const label = target?.closest('label');
+    const input = document?.querySelector('input[type="checkbox"]');
+    
     if (input && !input.checked) {
         input.click();
         await sleep(300);
