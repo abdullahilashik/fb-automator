@@ -1,15 +1,10 @@
 const path = require('path');
 const CopyPlugin = require('copy-webpack-plugin');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 module.exports = {
-  // 1. MUST be 'production' or if using 'development', you MUST set devtool (below)
-  mode: 'production', 
-
-  // 2. THIS IS THE KEY FIX: 
-  // 'source-map' or 'cheap-module-source-map' are CSP compliant.
-  // DO NOT use 'eval', 'eval-source-map', etc.
-  devtool: 'source-map', 
-
+  mode: 'production',
+  devtool: 'source-map',
   entry: {
     popup: './src/popup/index.jsx',
     content: './src/content/content.js',
@@ -34,7 +29,7 @@ module.exports = {
       },
       {
         test: /\.css$/i,
-        use: ['style-loader', 'css-loader', 'postcss-loader'],
+        use: [MiniCssExtractPlugin.loader, 'css-loader', 'postcss-loader'],
       },
     ],
   },
@@ -46,6 +41,9 @@ module.exports = {
       patterns: [
         { from: 'public', to: '.' },
       ],
+    }),
+    new MiniCssExtractPlugin({
+      filename: '[name].css',
     }),
   ],
 };

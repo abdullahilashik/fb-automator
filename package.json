@@ -6,10 +6,12 @@
     "watch": "webpack --watch --mode development --devtool inline-source-map"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.99.0",
+    "lucide-react": "^0.263.1",
     "papaparse": "^5.4.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "lucide-react": "^0.263.1"
+    "react-hot-toast": "^2.6.0"
   },
   "devDependencies": {
     "@babel/core": "^7.22.0",
@@ -19,6 +21,7 @@
     "babel-loader": "^9.1.2",
     "copy-webpack-plugin": "^11.0.0",
     "css-loader": "^6.8.1",
+    "mini-css-extract-plugin": "^2.10.2",
     "postcss": "^8.4.24",
     "postcss-loader": "^7.3.3",
     "style-loader": "^3.3.3",
