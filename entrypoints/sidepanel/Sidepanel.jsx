@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import AuthModal from "./AuthModal";
 import Settings from "./pages/Settings";
 import Listing, { buildVehicles } from "./pages/Listing";
+import NotConnected from "./pages/NotConnected";
 
 const TARGET_URL = "https://www.facebook.com/marketplace/create/vehicle";
 
@@ -62,6 +63,7 @@ const Sidepanel = () => {
   const [theme, setTheme] = useState("system");
   const [dark, setDark] = useState(false);
   const avatarMenuRef = useRef(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   const vehicles = useMemo(
     () => buildVehicles(items, results, currentIndex, running),
@@ -244,6 +246,27 @@ const Sidepanel = () => {
     await browser.storage.local.set({ draftItems: selectedItems, draftSavedAt: Date.now() });
     toast.success("Draft saved");
   };
+
+  if (!isConnected)
+    return (
+      <div className="h-full w-full bg-gray-200 dark:bg-gray-950 flex flex-col overflow-hidden">
+        <NotConnected
+          dark={dark}
+          auth={auth}
+          avatarLabel={avatarLabel}
+          avatarMenuOpen={avatarMenuOpen}
+          avatarMenuRef={avatarMenuRef}
+          onToggleAvatar={() => {
+            if (auth) setAvatarMenuOpen((v) => !v);
+            else setAuthModalOpen(true);
+          }}
+          onLogout={handleLogout}
+          onRefresh={loadData}
+          onOpenSettings={() => setView("settings")}
+          onConnectHandle={setIsConnected}
+        />
+      </div>
+    )
 
   return (
     <div className="h-full w-full bg-gray-200 dark:bg-gray-950 flex flex-col overflow-hidden">
