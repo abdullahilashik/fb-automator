@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DealerCore SidePanel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js for simple interactivity (checkboxes/counters) -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Custom scrollbar to make it look more like a professional app */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-gray-100 flex justify-center">
+
+    <!-- Side Panel Container -->
+    <div x-data="vehicleSelector()" class="w-[400px] h-screen bg-white shadow-2xl flex flex-col overflow-hidden border-l border-gray-200">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between p-4 border-b border-gray-100">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                    <i class="fa-solid fa-car"></i>
+                </div>
+                <span class="text-lg font-semibold text-gray-800 tracking-tight">Dealer<span class="text-gray-500 font-normal">Core</span></span>
+            </div>
+            <div class="flex items-center gap-4 text-gray-400">
+                <button class="hover:text-gray-600"><i class="fa-solid fa-thumbtack text-sm"></i></button>
+                <div class="w-[1px] h-4 bg-gray-200"></div>
+                <button class="hover:text-gray-600"><i class="fa-solid fa-gear text-sm"></i></button>
+                <button class="hover:text-gray-600"><i class="fa-solid fa-xmark text-sm"></i></button>
+            </div>
+        </div>
+
+        <!-- Main Content Area (Scrollable) -->
+        <div class="flex-1 overflow-y-auto p-5">
+            <h1 class="text-xl font-bold text-gray-900 mb-1">Select Vehicles</h1>
+            <p class="text-sm text-gray-500 mb-6">Choose the vehicles you want to advertise on Facebook.</p>
+
+            <div class="flex justify-between items-center mb-4">
+                <span class="text-sm font-medium text-gray-600" x-text="`${vehicles.length} vehicles available`"></span>
+                <button @click="toggleAll()" class="text-sm font-semibold text-sky-500 hover:text-sky-600">Select all</button>
+            </div>
+
+            <!-- Vehicle List -->
+            <div class="space-y-3">
+                <template x-for="car in vehicles" :key="car.id">
+                    <div class="border border-gray-200 rounded-xl p-3 flex gap-3 hover:border-sky-300 transition-colors cursor-pointer" 
+                         @click="toggleCar(car.id)">
+                        
+                        <!-- Checkbox -->
+                        <div class="flex items-start pt-1">
+                            <input type="checkbox" 
+                                   :checked="car.selected" 
+                                   @click.stop="toggleCar(car.id)"
+                                   class="w-4 h-4 rounded border-gray-300 text-sky-500 focus:ring-sky-500 cursor-pointer">
+                        </div>
+
+                        <!-- Image -->
+                        <img :src="car.image" class="w-24 h-16 object-cover rounded-md bg-gray-100">
+
+                        <!-- Details -->
+                        <div class="flex-1 overflow-hidden">
+                            <h3 class="text-sm font-bold text-gray-900 truncate" x-text="car.name"></h3>
+                            <p class="text-xs text-gray-500 mb-1" x-text="car.trim"></p>
+                            <p class="text-sm font-bold text-sky-500 mb-1" x-text="car.price"></p>
+                            <p class="text-[11px] text-gray-400" x-text="`${car.km} km • ${car.transmission} • ${car.fuel}`"></p>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Footer (Sticky) -->
+        <div class="p-4 border-t border-gray-100 bg-white">
+            <p class="text-sm font-medium text-gray-700 mb-3 text-center">
+                <span x-text="selectedCount()"></span> vehicles selected
+            </p>
+            <button class="w-full bg-sky-300 hover:bg-sky-400 text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
+                    :disabled="selectedCount() === 0">
+                <i class="fa-solid fa-arrow-right text-sm"></i>
+                Continue
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function vehicleSelector() {
+            return {
+                vehicles: [
+                    { id: 1, name: '2023 Toyota Hilux', trim: 'SR', price: '$54,990', km: '42,000', transmission: 'Automatic', fuel: 'Diesel', image: 'https://images.unsplash.com/photo-1583121274602-3e2820c69888?auto=format&fit=crop&q=80&w=200', selected: false },
+                    { id: 2, name: '2021 Mazda CX-5', trim: 'Maxx Sport', price: '$39,990', km: '31,500', transmission: 'Automatic', fuel: 'Petrol', image: 'https://images.unsplash.com/photo-1533473359318-07198254e9da?auto=format&fit=crop&q=80&w=200', selected: false },
+                    { id: 3, name: '2022 Ford Ranger', trim: 'XLT', price: '$59,990', km: '28,000', transmission: 'Automatic', fuel: 'Diesel', image: 'https://images.unsplash.com/photo-1533473359318-07198254e9da?auto=format&fit=crop&q=80&w=200', selected: false },
+                    { id: 4, name: '2020 Toyota Corolla', trim: 'Ascent Sport', price: '$24,990', km: '51,000', transmission: 'CVT', fuel: 'Petrol', image: 'https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?auto=format&fit=crop&q=80&w=200', selected: false },
+                ],
+                toggleCar(id) {
+                    const car = this.vehicles.find(v => v.id === id);
+                    if (car) car.selected = !car.selected;
+                },
+                toggleAll() {
+                    const allSelected = this.vehicles.every(v => v.selected);
+                    this.vehicles.forEach(v => v.selected = !allSelected);
+                },
+                selectedCount() {
+                    return this.vehicles.filter(v => v.selected).length;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

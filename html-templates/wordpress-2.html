@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WP Admin - Dealercore Sync Settings</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f0f1;
+        }
+
+        /* WP Admin Colors */
+        .wp-sidebar {
+            background-color: #1d2327;
+        }
+
+        .wp-toolbar {
+            background-color: #1d2327;
+        }
+
+        .wp-primary-blue {
+            background-color: #2271b1;
+        }
+
+        .wp-primary-blue:hover {
+            background-color: #135e9a;
+        }
+
+        /* Design Skins */
+        .skin-modern {
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border: 1px solid #eee;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .skin-luxury {
+            border-radius: 0px;
+            border: 1px solid #d4af37;
+            background: #fdfbf7;
+            font-family: 'Playfair Display', serif;
+        }
+
+        .skin-budget {
+            border-radius: 4px;
+            border: 3px solid #ef4444;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .skin-dark {
+            border-radius: 8px;
+            background: #1a1a1a;
+            color: white;
+            border: 1px solid #333;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .skin-minimal {
+            border-radius: 0;
+            border-bottom: 3px solid #000;
+            background: white;
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Layouts */
+        .layout-grid {
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .layout-list {
+            width: 550px;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+        }
+
+        .layout-compact {
+            width: 220px;
+            display: flex;
+            flex-direction: column;
+            font-size: 0.8rem;
+        }
+
+        .hidden-field {
+            display: none !important;
+        }
+
+        /* Scrollbar for WP feel */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body class="h-screen overflow-hidden flex flex-col">
+
+    <!-- WP ADMIN TOOLBAR -->
+    <div class="wp-toolbar h-8 w-full flex items-center px-4 text-gray-300 text-xs space-x-4">
+        <span class="font-bold text-white">My Dealer Site</span>
+        <span class="hover:text-white cursor-pointer">Dashboard</span>
+        <span class="hover:text-white cursor-pointer">Posts</span>
+        <span class="hover:text-white cursor-pointer">Media</span>
+        <span class="hover:text-white cursor-pointer">Pages</span>
+        <span class="hover:text-white cursor-pointer">Dealercore Sync</span>
+    </div>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- WP ADMIN SIDEBAR -->
+        <div class="wp-sidebar w-64 flex flex-col text-gray-400">
+            <div class="p-4 text-white font-bold text-lg border-b border-gray-700 flex items-center">
+                <span class="mr-2">🚗</span> Dealercore
+            </div>
+            <nav class="flex-1 py-4 text-sm">
+                <div class="px-4 py-2 hover:bg-gray-700 cursor-pointer flex items-center">
+                    <span class="mr-3">📊</span> Dashboard
+                </div>
+                <div class="px-4 py-2 bg-blue-800 text-white flex items-center cursor-pointer">
+                    <span class="mr-3">🎨</span> Design Settings
+                </div>
+                <div class="px-4 py-2 hover:bg-gray-700 cursor-pointer flex items-center">
+                    <span class="mr-3">📦</span> Vehicle Stock
+                </div>
+                <div class="px-4 py-2 hover:bg-gray-700 cursor-pointer flex items-center">
+                    <span class="mr-3">⚙️</span> API Configuration
+                </div>
+                <div class="mt-10 px-4 text-xs font-bold uppercase text-gray-500">Core WordPress</div>
+                <div class="px-4 py-2 hover:bg-gray-700 cursor-pointer flex items-center">
+                    <span class="mr-3">🏠</span> Dashboard
+                </div>
+                <div class="px-4 py-2 hover:bg-gray-700 cursor-pointer flex items-center">
+                    <span class="mr-3">🔌</span> Plugins
+                </div>
+                <div class="px-4 py-2 hover:bg-gray-700 cursor-pointer flex items-center">
+                    <span class="mr-3">🛠️</span> Settings
+                </div>
+            </nav>
+        </div>
+
+        <!-- MAIN CONTENT AREA -->
+        <div class="flex-1 flex overflow-hidden">
+
+            <!-- LEFT: PLUGIN SETTINGS PANEL -->
+            <div class="w-1/2 p-6 overflow-y-auto border-r bg-gray-100">
+                <div class="mb-6">
+                    <h1 class="text-2xl font-bold text-gray-800">Frontend Design Customizer</h1>
+                    <p class="text-gray-600">Configure how your inventory is presented to the public.</p>
+                </div>
+
+                <!-- WP-Style Card Container -->
+                <div class="bg-white border border-gray-300 rounded shadow-sm p-6 mb-6">
+                    <h3 class="font-semibold text-gray-700 border-b pb-3 mb-4">Visual Layout</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <button onclick="updateLayout('grid')" id="btn-grid"
+                            class="p-3 border-2 rounded text-left transition bg-blue-50 border-blue-500 hover:border-blue-600">
+                            <div class="font-bold text-sm">Grid Layout</div>
+                            <div class="text-xs text-gray-500">Standard card grid</div>
+                        </button>
+                        <button onclick="updateLayout('list')" id="btn-list"
+                            class="p-3 border-2 rounded text-left transition hover:border-blue-500">
+                            <div class="font-bold text-sm">List Layout</div>
+                            <div class="text-xs text-gray-500">Horizontal row view</div>
+                        </button>
+                        <button onclick="updateLayout('compact')" id="btn-compact"
+                            class="p-3 border-2 rounded text-left transition hover:border-blue-500">
+                            <div class="font-bold text-sm">Compact Layout</div>
+                            <div class="text-xs text-gray-500">High-density view</div>
+                        </button>
+                        <button onclick="updateLayout('featured')" id="btn-featured"
+                            class="p-3 border-2 rounded text-left transition hover:border-blue-500">
+                            <div class="font-bold text-sm">Featured Layout</div>
+                            <div class="text-xs text-gray-500">Hero style layout</div>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-gray-300 rounded shadow-sm p-6 mb-6">
+                    <h3 class="font-semibold text-gray-700 border-b pb-3 mb-4">Design Skin</h3>
+                    <div class="space-y-3">
+                        <div onclick="updateSkin('modern')" id="skin-modern"
+                            class="flex items-center p-3 border rounded cursor-pointer hover:bg-gray-50 transition bg-blue-50 border-blue-500">
+                            <div class="w-4 h-4 rounded-full bg-blue-500 mr-3"></div>
+                            <span class="text-sm font-medium">Modern (Clean & Soft)</span>
+                        </div>
+                        <div onclick="updateSkin('luxury')" id="skin-luxury"
+                            class="flex items-center p-3 border rounded cursor-pointer hover:bg-gray-50 transition">
+                            <div class="w-4 h-4 rounded-full bg-yellow-600 mr-3"></div>
+                            <span class="text-sm font-medium">Luxury (Elegant & Classic)</span>
+                        </div>
+                        <div onclick="updateSkin('budget')" id="skin-budget"
+                            class="flex items-center p-3 border rounded cursor-pointer hover:bg-gray-50 transition">
+                            <div class="w-4 h-4 rounded-full bg-red-500 mr-3"></div>
+                            <span class="text-sm font-medium">Budget (Bold & Urgent)</span>
+                        </div>
+                        <div onclick="updateSkin('dark')" id="skin-dark"
+                            class="flex items-center p-3 border rounded cursor-pointer hover:bg-gray-50 transition">
+                            <div class="w-4 h-4 rounded-full bg-gray-800 mr-3"></div>
+                            <span class="text-sm font-medium">Dark Mode (Sporty)</span>
+                        </div>
+                        <div onclick="updateSkin('minimal')" id="skin-minimal"
+                            class="flex items-center p-3 border rounded cursor-pointer hover:bg-gray-50 transition">
+                            <div class="w-4 h-4 rounded-full bg-gray-300 mr-3"></div>
+                            <span class="text-sm font-medium">Minimalist (Pure)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white border border-gray-300 rounded shadow-sm p-6 mb-6">
+                    <h3 class="font-semibold text-gray-700 border-b pb-3 mb-4">Field Visibility</h3>
+                    <div class="space-y-3">
+                        <label class="flex items-center cursor-pointer group">
+                            <input type="checkbox" checked onchange="toggleField('field-vin')"
+                                class="w-4 h-4 text-blue-600">
+                            <span class="ml-3 text-sm text-gray-700 group-hover:text-black">Show VIN Number</span>
+                        </label>
+                        <label class="flex items-center cursor-pointer group">
+                            <input type="checkbox" checked onchange="toggleField('field-mileage')"
+                                class="w-4 h-4 text-blue-600">
+                            <span class="ml-3 text-sm text-gray-700 group-hover:text-black">Show Mileage</span>
+                        </label>
+                        <label class="flex items-center cursor-pointer group">
+                            <input type="checkbox" checked onchange="toggleField('field-price')"
+                                class="w-4 h-4 text-blue-600">
+                            <span class="ml-3 text-sm text-gray-700 group-hover:text-black">Show Price</span>
+                        </label>
+                    </div>
+                </div>
+
+                <button
+                    class="wp-primary-blue text-white px-4 py-2 rounded font-medium text-sm transition shadow-sm">Save
+                    Changes</button>
+            </div>
+
+            <!-- RIGHT: THE BROWSER PREVIEW WINDOW -->
+            <div class="w-1/2 bg-gray-300 p-8 flex flex-col items-center justify-center">
+
+                <!-- Browser Frame -->
+                <div class="w-full max-w-3xl bg-white rounded-t-lg shadow-2xl overflow-hidden border border-gray-400">
+                    <!-- Browser Header -->
+                    <div class="bg-gray-100 px-4 py-2 border-b flex items-center space-x-2">
+                        <div class="flex space-x-1">
+                            <div class="w-3 h-3 bg-red-400 rounded-full"></div>
+                            <div class="w-3 h-3 bg-yellow-400 rounded-full"></div>
+                            <div class="w-3 h-3 bg-green-400 rounded-full"></div>
+                        </div>
+                        <div class="bg-white border rounded px-3 py-1 text-xs text-gray-500 flex-1 mx-4 italic">
+                            http://wordpress.test/vehicles/
+                        </div>
+                    </div>
+
+                    <!-- Browser Content -->
+                    <div class="p-12 bg-gray-50 min-h-[500px] flex flex-col items-center justify-center">
+                        <div class="mb-8 text-center">
+                            <h2 class="text-2xl font-bold text-gray-800">Our Current Inventory</h2>
+                            <p class="text-gray-500">Find your dream car below</p>
+                        </div>
+
+                        <!-- THE DYNAMIC VEHICLE CARD -->
+                        <div id="preview-card" class="skin-modern layout-grid p-4 transition-all duration-300 bg-white">
+                            <div id="card-img" class="w-full h-48 bg-gray-200 mb-4 overflow-hidden">
+                                <img src="https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=400&q=80"
+                                    class="w-full h-full object-cover">
+                            </div>
+                            <div id="card-content">
+                                <h2 id="prev-title" class="text-xl font-bold mb-1">2023 Cadillac Escalade</h2>
+                                <div id="field-price" class="text-blue-600 font-bold text-lg mb-3">$85,000</div>
+
+                                <div class="text-sm text-gray-600 space-y-1 mb-4">
+                                    <div id="field-vin" class="flex justify-between">
+                                        <span>VIN:</span> <span class="font-mono text-xs">1C3BM5S...</span>
+                                    </div>
+                                    <div id="field-mileage" class="flex justify-between">
+                                        <span>Mileage:</span> <span>1,200 mi</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Engine:</span> <span>6.2L V8</span>
+                                    </div>
+                                </div>
+
+                                <button id="prev-btn"
+                                    class="w-full py-2 bg-blue-600 text-white rounded font-semibold transition">Reserve
+                                    Now</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="mt-4 text-gray-500 text-sm italic">Preview represents the frontend customer view</p>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        function updateLayout(layout) {
+            const card = document.getElementById('preview-card');
+            card.className = '';
+            card.classList.add('p-4', 'transition-all', 'duration-300', 'bg-white');
+            card.classList.add('layout-' + layout);
+
+            const img = document.getElementById('card-img');
+            if (layout === 'list') {
+                img.className = 'w-1/3 h-32 mr-4 mb-0 overflow-hidden';
+                document.getElementById('card-content').className = 'flex-1';
+            } else if (layout === 'compact') {
+                img.className = 'w-full h-32 mb-2 overflow-hidden';
+                document.getElementById('card-content').className = '';
+            } else if (layout === 'featured') {
+                img.className = 'w-full h-64 mb-4 overflow-hidden';
+                document.getElementById('card-content').className = 'text-center';
+            } else {
+                img.className = 'w-full h-48 mb-4 overflow-hidden';
+                document.getElementById('card-content').className = '';
+            }
+
+            document.querySelectorAll('.layout-btn').forEach(btn => btn.classList.remove('bg-blue-50', 'border-blue-500'));
+            // To keep this simple, I'll use a manual ID update since we don't have a loop
+            const btn = document.getElementById('btn-' + layout);
+            if (btn) {
+                document.querySelectorAll('[id^="btn-"]').forEach(b => b.classList.remove('bg-blue-50', 'border-blue-500'));
+                btn.classList.add('bg-blue-50', 'border-blue-500');
+            }
+        }
+
+        function updateSkin(skin) {
+            const card = document.getElementById('preview-card');
+            const btn = document.getElementById('prev-btn');
+
+            card.classList.remove('skin-modern', 'skin-luxury', 'skin-budget', 'skin-dark', 'skin-minimal');
+            card.classList.add('skin-' + skin);
+
+            btn.className = 'w-full py-2 rounded font-semibold transition';
+            if (skin === 'luxury') btn.classList.add('bg-yellow-600', 'text-white');
+            else if (skin === 'budget') btn.classList.add('bg-red-600', 'text-white');
+            else if (skin === 'dark') btn.classList.add('bg-cyan-400', 'text-black');
+            else if (skin === 'minimal') btn.classList.add('border', 'border-black', 'text-black');
+            else btn.classList.add('bg-blue-600', 'text-white');
+
+            document.querySelectorAll('.skin-opt').forEach(opt => opt.classList.remove('bg-blue-50', 'border-blue-500'));
+            document.getElementById('skin-' + skin).classList.add('bg-blue-50', 'border-blue-500');
+        }
+
+        function toggleField(fieldId) {
+            const field = document.getElementById(fieldId);
+            field.classList.toggle('hidden-field');
+        }
+    </script>
+</body>
+
+</html>

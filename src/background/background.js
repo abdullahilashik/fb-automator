@@ -1,3 +1,7 @@
+if (chrome.sidePanel) {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   console.log("FB Automator Extension Installed");
 });

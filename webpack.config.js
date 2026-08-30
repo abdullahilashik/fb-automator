@@ -7,6 +7,7 @@ module.exports = {
   // devtool: 'source-map',
   entry: {
     popup: './src/popup/index.jsx',
+    sidepanel: './src/sidepanel/index.jsx',
     content: './src/content/content.js',
     background: './src/background/background.js',
   },

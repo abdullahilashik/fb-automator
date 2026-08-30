@@ -2,9 +2,13 @@
   "manifest_version": 3,
   "name": "FB Marketplace Automator",
   "version": "1.0",
-  "permissions": ["storage", "activeTab", "scripting"],
+  "permissions": ["storage", "activeTab", "scripting", "sidePanel"],
   "action": {
+    "default_title": "DealerCore",
     "default_popup": "popup.html"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
   },
   "background": {
     "service_worker": "background.js"
