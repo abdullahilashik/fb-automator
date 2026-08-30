@@ -28,7 +28,7 @@ const validateContact = (value) => {
   return /^\+?[\d\s()-]{7,}$/.test(v) ? null : "Enter a valid phone number";
 };
 
-const AuthModal = ({ open, onClose, onSuccess }) => {
+const AuthModal = ({ open, onClose, onSuccess, dark }) => {
   const [step, setStep] = useState("contact");
   const [contact, setContact] = useState("");
   const [otp, setOtp] = useState("");
@@ -103,20 +103,16 @@ const AuthModal = ({ open, onClose, onSuccess }) => {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-      <div className="w-full max-w-[320px] bg-white rounded-2xl shadow-2xl overflow-hidden">
-        <div className="bg-sky-600/10 px-5 py-4 flex items-center justify-between">
+      <div className="w-full max-w-[320px] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="bg-sky-600/10 dark:bg-sky-500/15 px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {/* <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
-              <Car className="w-3 h-3 text-white" />
-            </div> */}
-            {/* <span className="text-sm font-bold text-white">DealerCore</span> */}
             <img
-              src="/dc-logo.png"
+              src={dark ? "/dc-logo-dark.png" : "/dc-logo.png"}
               alt="DealerCore"
               className="h-6 w-auto object-contain"
             />
           </div>
-          <button onClick={onClose} className="text-black/70 hover:text-black">
+          <button onClick={onClose} className="text-black/70 dark:text-gray-300 hover:text-black dark:hover:text-white">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -125,14 +121,14 @@ const AuthModal = ({ open, onClose, onSuccess }) => {
           {step === "contact" ? (
             <>
               <div className="flex items-center gap-2 mb-1">
-                <ShieldCheck className="w-4 h-4 text-sky-600" />
-                <h2 className="text-base font-bold text-gray-900">Sign in</h2>
+                <ShieldCheck className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Sign in</h2>
               </div>
-              <p className="text-[12px] text-gray-500 mb-4">
+              <p className="text-[12px] text-gray-500 dark:text-gray-400 mb-4">
                 Enter your email or phone number and we'll send you a one-time code.
               </p>
 
-              <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+              <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-300 mb-1">
                 Email or phone number
               </label>
               <input
@@ -141,7 +137,7 @@ const AuthModal = ({ open, onClose, onSuccess }) => {
                 onChange={(e) => setContact(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSendCode()}
                 placeholder="you@example.com or +1 555 000 0000"
-                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 transition-all"
+                className="w-full text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-2 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:focus:ring-sky-900 transition-all"
               />
 
               {error && <p className="text-[11px] text-red-500 mt-1.5">{error}</p>}
@@ -163,21 +159,21 @@ const AuthModal = ({ open, onClose, onSuccess }) => {
                   setError("");
                   setOtp("");
                 }}
-                className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 hover:text-gray-700 mb-3"
+                className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 mb-3"
               >
                 <ArrowLeft className="w-3 h-3" /> Change contact
               </button>
 
               <div className="flex items-center gap-2 mb-1">
-                <ShieldCheck className="w-4 h-4 text-sky-600" />
-                <h2 className="text-base font-bold text-gray-900">Enter the code</h2>
+                <ShieldCheck className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Enter the code</h2>
               </div>
-              <p className="text-[12px] text-gray-500 mb-3">
+              <p className="text-[12px] text-gray-500 dark:text-gray-400 mb-3">
                 We sent a 6-digit code to
-                <span className="font-semibold text-gray-700"> {contact}</span>.
+                <span className="font-semibold text-gray-700 dark:text-gray-200"> {contact}</span>.
               </p>
 
-              <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+              <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-300 mb-1">
                 Verification code
               </label>
               <input
@@ -188,14 +184,14 @@ const AuthModal = ({ open, onClose, onSuccess }) => {
                 onKeyDown={(e) => e.key === "Enter" && handleVerify()}
                 placeholder="000000"
                 maxLength={6}
-                className="w-full text-sm tracking-[0.5em] font-mono text-center border border-gray-300 rounded-lg px-3 py-2.5 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 transition-all"
+                className="w-full text-sm tracking-[0.5em] font-mono text-center border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-2.5 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 dark:focus:ring-sky-900 transition-all"
               />
 
-              <div className="mt-3 flex items-start gap-2 bg-gray-50 border border-dashed border-gray-200 rounded-lg px-3 py-2">
+              <div className="mt-3 flex items-start gap-2 bg-gray-50 dark:bg-gray-800 border border-dashed border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2">
                 <RefreshCw className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
-                <p className="text-[11px] text-gray-500">
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">
                   Demo mode — your code is{" "}
-                  <span className="font-mono font-bold text-sky-600">{demoCode}</span>
+                  <span className="font-mono font-bold text-sky-600 dark:text-sky-400">{demoCode}</span>
                 </p>
               </div>
 

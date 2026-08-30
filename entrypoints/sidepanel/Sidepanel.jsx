@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { browser } from "wxt/browser";
-import { Bookmark, Loader2, LogOut, RefreshCw, Send, Settings, User } from "lucide-react";
+import { Bookmark, Loader2, LogOut, RefreshCw, Send, User } from "lucide-react";
+import { Settings as SettingsIcon } from "lucide-react";
 import toast from "react-hot-toast";
 import AuthModal from "./AuthModal";
+import Settings from "./Settings";
 
 const TARGET_URL = "https://www.facebook.com/marketplace/create/vehicle";
 
@@ -49,22 +51,22 @@ const DEFAULT_ITEMS = [
 
 const STATUS_STYLES = {
   success: {
-    card: "border-green-200 bg-green-50",
-    footer: "text-green-700",
+    card: "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950",
+    footer: "text-green-700 dark:text-green-400",
     message: "Ad details filled",
   },
   error: {
-    card: "border-red-200 bg-red-50",
-    footer: "text-red-700",
+    card: "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950",
+    footer: "text-red-700 dark:text-red-400",
     message: "Required fields couldn't be filled",
   },
   processing: {
-    card: "border-blue-200 bg-blue-50",
-    footer: "text-blue-700",
+    card: "border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950",
+    footer: "text-blue-700 dark:text-blue-400",
     message: "Processing:",
   },
   default: {
-    card: "border-gray-200 bg-white",
+    card: "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900",
     footer: "text-gray-400",
     message: "",
   },
@@ -115,6 +117,9 @@ const Sidepanel = () => {
   const [auth, setAuth] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [view, setView] = useState("main");
+  const [theme, setTheme] = useState("system");
+  const [dark, setDark] = useState(false);
   const avatarMenuRef = useRef(null);
 
   const vehicles = useMemo(
@@ -181,6 +186,31 @@ const Sidepanel = () => {
   useEffect(() => {
     browser.storage.local.set({ auth });
   }, [auth]);
+
+  useEffect(() => {
+    (async () => {
+      const data = await browser.storage.local.get("appearance");
+      if (data.appearance?.theme) {
+        setTheme(data.appearance.theme);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const dark =
+        theme === "dark" || (theme === "system" && media.matches);
+      document.documentElement.classList.toggle("dark", dark);
+      setDark(dark);
+    };
+    apply();
+    browser.storage.local.set({ appearance: { theme } });
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [theme]);
+
+  const handleThemeChange = (value) => setTheme(value);
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -275,26 +305,37 @@ const Sidepanel = () => {
   };
 
   return (
-    <div className="h-full w-full bg-gray-200 flex flex-col overflow-hidden">
-      <div className="h-full w-full bg-white flex flex-col overflow-hidden shadow-xl">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
+    <div className="h-full w-full bg-gray-200 dark:bg-gray-950 flex flex-col overflow-hidden">
+      {view === "settings" ? (
+        <div className="h-full w-full flex flex-col overflow-hidden shadow-xl">
+          <Settings
+            theme={theme}
+            onThemeChange={handleThemeChange}
+            auth={auth}
+            onOpenAuth={() => setAuthModalOpen(true)}
+            onBack={() => setView("main")}
+          />
+        </div>
+      ) : (
+      <div className="h-full w-full bg-white dark:bg-gray-900 flex flex-col overflow-hidden shadow-xl">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800 shrink-0">
           <div className="flex items-center gap-2">
             <img
-              src="/dc-logo.png"
+              src={dark ? "/dc-logo-dark.png" : "/dc-logo.png"}
               alt="DealerCore"
               className="h-6 w-auto object-contain"
             />
           </div>
           <div className="flex items-center gap-3 text-gray-400">
-            <button className="hover:text-gray-600" onClick={() => loadData()}>
+            <button className="hover:text-gray-600 dark:hover:text-gray-300" onClick={() => loadData()}>
               <RefreshCw className="w-4 h-4" />
             </button>
-            <div className="w-[1px] h-4 bg-gray-200" />
-            <button className="hover:text-gray-600">
+            <div className="w-[1px] h-4 bg-gray-200 dark:bg-gray-700" />
+            <button className="hover:text-gray-600 dark:hover:text-gray-300">
               <Bookmark className="w-4 h-4" />
             </button>
-            <button className="hover:text-gray-600">
-              <Settings className="w-4 h-4" />
+            <button className="hover:text-gray-600 dark:hover:text-gray-300" onClick={() => setView("settings")}>
+              <SettingsIcon className="w-4 h-4" />
             </button>
             <div className="relative" ref={avatarMenuRef}>
               <button
@@ -306,7 +347,7 @@ const Sidepanel = () => {
                 title={auth ? avatarLabel : "Sign in"}
               >
                 {auth ? (
-                  <div className="w-7 h-7 rounded-full bg-sky-600 text-white flex items-center justify-center overflow-hidden text-sm font-semibold ring-2 ring-sky-100">
+                  <div className="w-7 h-7 rounded-full bg-sky-600 text-white flex items-center justify-center overflow-hidden text-sm font-semibold ring-2 ring-sky-100 dark:ring-sky-900">
                     {auth.user?.imageUrl ? (
                       <img
                         src={auth.user.imageUrl}
@@ -319,25 +360,25 @@ const Sidepanel = () => {
                     )}
                   </div>
                 ) : (
-                  <div className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center ring-2 ring-gray-200">
+                  <div className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 flex items-center justify-center ring-2 ring-gray-200 dark:ring-gray-700">
                     <User className="w-4 h-4" />
                   </div>
                 )}
               </button>
 
               {auth && avatarMenuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-100 p-1 z-40">
-                  <div className="px-3 py-2 border-b border-gray-100 mb-1">
-                    <p className="text-[12px] font-bold text-gray-900 truncate">
+                <div className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 p-1 z-40">
+                  <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700 mb-1">
+                    <p className="text-[12px] font-bold text-gray-900 dark:text-gray-100 truncate">
                       {auth.user?.name || "User"}
                     </p>
-                    <p className="text-[10px] text-gray-500 truncate">
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
                       {auth.user?.email || auth.user?.phone || ""}
                     </p>
                   </div>
                   <button
                     onClick={handleLogout}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-[12px] font-semibold text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-[12px] font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition-colors"
                   >
                     <LogOut className="w-3.5 h-3.5" /> Sign out
                   </button>
@@ -354,13 +395,13 @@ const Sidepanel = () => {
             </div>
           ) : (
             <>
-              <h1 className="text-md font-bold text-gray-900 leading-tight">Select Vehicles</h1>
-              <p className="text-[11px] text-gray-500 mt-1 mb-6">
+              <h1 className="text-md font-bold text-gray-900 dark:text-gray-100 leading-tight">Select Vehicles</h1>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 mb-6">
                 Choose the vehicles you want to advertise on Facebook.
               </p>
 
               <div className="flex justify-between items-center mb-4">
-                <span className="text-[12px] text-gray-600">{vehicles.length} vehicles available</span>
+                <span className="text-[12px] text-gray-600 dark:text-gray-300">{vehicles.length} vehicles available</span>
                 <button
                   onClick={toggleAll}
                   className="text-[12px] font-semibold text-blue-500 hover:text-blue-600 transition-colors"
@@ -382,7 +423,7 @@ const Sidepanel = () => {
                       <div className="p-2 flex gap-3">
                         <div className="flex items-start pt-1">
                           <div
-                            className={`w-4 h-4 border rounded flex items-center justify-center transition-all ${isSelected ? "bg-sky-500 border-sky-500" : "bg-white border-gray-300"
+                            className={`w-4 h-4 border rounded flex items-center justify-center transition-all ${isSelected ? "bg-sky-500 border-sky-500" : "bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600"
                               }`}
                           >
                             {isSelected && (
@@ -396,17 +437,17 @@ const Sidepanel = () => {
                         <img
                           src={car.image}
                           onError={(e) => (e.currentTarget.src = FALLBACK_IMAGE)}
-                          className="w-24 h-16 object-cover rounded-md bg-gray-50"
+                          className="w-24 h-16 object-cover rounded-md bg-gray-50 dark:bg-gray-800"
                           alt={car.name}
                         />
 
                         <div className="flex-1 min-w-0 relative">
                           <div className="flex justify-between items-start">
-                            <h3 className="text-[12px] font-bold text-gray-900 truncate">{car.name}</h3>
+                            <h3 className="text-[12px] font-bold text-gray-900 dark:text-gray-100 truncate">{car.name}</h3>
                             {car.status === "error" && (
                               <button
                                 onClick={(e) => e.stopPropagation()}
-                                className="text-red-400 hover:text-red-600 p-1 bg-white rounded-full shadow-sm"
+                                className="text-red-400 hover:text-red-600 p-1 bg-white dark:bg-gray-800 rounded-full shadow-sm"
                               >
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -414,7 +455,7 @@ const Sidepanel = () => {
                               </button>
                             )}
                           </div>
-                          <p className="text-[10px] text-gray-500 mb-0">{car.trim}</p>
+                          <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0">{car.trim}</p>
                           <p className="text-[12px] font-bold text-sky-500">{car.price}</p>
                           <p className="text-[10px] text-gray-400 mt-0">
                             {car.km} km • {car.transmission} • {car.fuel}
@@ -457,9 +498,9 @@ const Sidepanel = () => {
           )}
         </div>
 
-        <div className="p-4 border-t border-gray-100 bg-white shrink-0">
+        <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0">
           <div className="flex justify-between items-center mb-3">
-            <p className="text-[12px] font-medium text-gray-700">
+            <p className="text-[12px] font-medium text-gray-700 dark:text-gray-300">
               <span>{selectedCount}</span> vehicles selected
             </p>
             <button
@@ -480,18 +521,20 @@ const Sidepanel = () => {
             </button>
             <button
               onClick={saveDraft}
-              className="text-sm w-full bg-white border border-gray-300 text-gray-700 font-semibold py-2 rounded-lg hover:bg-gray-50 transition-all"
+              className="text-sm w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-semibold py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
             >
               Save as draft
             </button>
           </div>
         </div>
       </div>
+      )}
 
       <AuthModal
         open={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         onSuccess={handleAuthSuccess}
+        dark={dark}
       />
     </div>
   );

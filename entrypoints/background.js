@@ -12,5 +12,7 @@ export default defineBackground(() => {
         url: 'https://www.facebook.com/marketplace/create/vehicle',
       });
     }
+    // keep the message line open
+    return true;
   });
 });
