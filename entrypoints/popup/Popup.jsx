@@ -1,62 +1,62 @@
 import React from "react";
+import { browser } from "wxt/browser";
 import { PlayCircle, Car, Settings, CheckCircle } from "lucide-react";
 
-const Popup = () => {
-  // Static Data for testing
-  const testData = [
-    {
-      id: 1,
-      vehicleType: "Car/van",
-      imageUrls: ["https://picsum.photos/800/600"],
-      location: "Sydney, New South Wales, Australia",
-      year: "2021",
-      make: "Ford",
-      model: "F-150",
-      mileage: "25000",
-      price: "45000",
-      fuelType: "Petrol",
-      transmission: "Automatic transmission",
-      bodyStyle: "Van",
-      condition: "Excellent",
-      exteriorColour: "Black",
-      interiorColour: "Black",
-      cleanTitle: true,
-      description: "Excellent condition, one owner, smoke-free.",
-    },
-    {
-      id: 2,
-      vehicleType: "Car/van",
-      imageUrls: ["https://picsum.photos/800/600"],
-      location: "Melbourne, Victoria, Australia",
-      year: "2022",
-      make: "Toyota",
-      model: "Camry",
-      mileage: "15000",
-      price: "35000",
-      fuelType: "Hybrid",
-      transmission: "Automatic transmission",
-      bodyStyle: "Van",
-      condition: "Like new",
-      exteriorColour: "White",
-      interiorColour: "Grey",
-      cleanTitle: true,
-      description: "Great car, fuel efficient, low mileage.",
-    },
-  ];
+const testData = [
+  {
+    id: 1,
+    vehicleType: "Car/van",
+    imageUrls: ["https://picsum.photos/800/600"],
+    location: "Sydney, New South Wales, Australia",
+    year: "2021",
+    make: "Ford",
+    model: "F-150",
+    mileage: "25000",
+    price: "45000",
+    fuelType: "Petrol",
+    transmission: "Automatic transmission",
+    bodyStyle: "Van",
+    condition: "Excellent",
+    exteriorColour: "Black",
+    interiorColour: "Black",
+    cleanTitle: true,
+    description: "Excellent condition, one owner, smoke-free.",
+  },
+  {
+    id: 2,
+    vehicleType: "Car/van",
+    imageUrls: ["https://picsum.photos/800/600"],
+    location: "Melbourne, Victoria, Australia",
+    year: "2022",
+    make: "Toyota",
+    model: "Camry",
+    mileage: "15000",
+    price: "35000",
+    fuelType: "Hybrid",
+    transmission: "Automatic transmission",
+    bodyStyle: "Van",
+    condition: "Like new",
+    exteriorColour: "White",
+    interiorColour: "Grey",
+    cleanTitle: true,
+    description: "Great car, fuel efficient, low mileage.",
+  },
+];
 
+const Popup = () => {
   const startAutomation = () => {
     // 1. Save data to storage
-    chrome.storage.local.set({ items: testData, currentIndex: 0, results: [] }, () => {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    browser.storage.local.set({ items: testData, currentIndex: 0, results: [] }, () => {
+      browser.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const tab = tabs[0];
         const targetUrl = "https://www.facebook.com/marketplace/create/vehicle";
-        
+
         if (tab.url.startsWith("https://www.facebook.com/marketplace/create/")) {
             // Already on the right page, send message to trigger runAutomation()
-            chrome.tabs.sendMessage(tab.id, { action: "START_AUTOMATION" });
+            browser.tabs.sendMessage(tab.id, { action: "START_AUTOMATION" });
         } else {
             // Navigate to the creation page
-            chrome.tabs.update(tab.id, { url: targetUrl });
+            browser.tabs.update(tab.id, { url: targetUrl });
         }
         window.close(); // Close popup
       });

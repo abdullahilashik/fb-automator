@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { browser } from "wxt/browser";
 import { Bookmark, Car, Loader2, RefreshCw, Send, Settings } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -118,7 +119,7 @@ const Sidepanel = () => {
 
   const loadData = useCallback(async () => {
     try {
-      const data = await chrome.storage.local.get(["items", "results", "currentIndex", "selectedIds"]);
+      const data = await browser.storage.local.get(["items", "results", "currentIndex", "selectedIds"]);
       const storedItems = Array.isArray(data.items) && data.items.length ? data.items : DEFAULT_ITEMS;
       const storedResults = Array.isArray(data.results) ? data.results : [];
       const storedIndex = data.currentIndex || 0;
@@ -145,7 +146,7 @@ const Sidepanel = () => {
   useEffect(() => {
     if (!running) return;
     const timer = setInterval(async () => {
-      const data = await chrome.storage.local.get(["items", "results", "currentIndex"]);
+      const data = await browser.storage.local.get(["items", "results", "currentIndex"]);
       if (Array.isArray(data.items)) {
         setItems(data.items);
       }
@@ -168,7 +169,7 @@ const Sidepanel = () => {
   }, [running, items]);
 
   useEffect(() => {
-    chrome.storage.local.set({ selectedIds: Array.from(selectedIds) });
+    browser.storage.local.set({ selectedIds: Array.from(selectedIds) });
   }, [selectedIds]);
 
   const toggleCar = (id) => {
@@ -198,7 +199,7 @@ const Sidepanel = () => {
       return;
     }
 
-    await chrome.storage.local.set({
+    await browser.storage.local.set({
       items: selectedItems,
       currentIndex: 0,
       results: [],
@@ -211,20 +212,20 @@ const Sidepanel = () => {
     setRunning(true);
     setSelectedIds(itemIds);
 
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     if (!tab) {
       toast.error("No active tab found");
       return;
     }
 
     if (tab.url && tab.url.startsWith("https://www.facebook.com/marketplace/create/")) {
-      chrome.tabs.sendMessage(tab.id, { action: "START_AUTOMATION" }, () => {
-        if (chrome.runtime.lastError) {
-          chrome.tabs.update(tab.id, { url: TARGET_URL });
+      browser.tabs.sendMessage(tab.id, { action: "START_AUTOMATION" }, () => {
+        if (browser.runtime.lastError) {
+          browser.tabs.update(tab.id, { url: TARGET_URL });
         }
       });
     } else {
-      chrome.tabs.update(tab.id, { url: TARGET_URL });
+      browser.tabs.update(tab.id, { url: TARGET_URL });
     }
 
     toast.success(`Publishing ${selectedItems.length} vehicle(s)`);
@@ -236,7 +237,7 @@ const Sidepanel = () => {
       toast.error("Select at least one vehicle");
       return;
     }
-    await chrome.storage.local.set({ draftItems: selectedItems, draftSavedAt: Date.now() });
+    await browser.storage.local.set({ draftItems: selectedItems, draftSavedAt: Date.now() });
     toast.success("Draft saved");
   };
 

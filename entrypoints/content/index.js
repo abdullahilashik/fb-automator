@@ -1,7 +1,11 @@
-import { findLabelByText } from "../utils/find-label-by";
-import { handleAutosuggestDropdown, handleCheckbox, handleDropdown, handlePhotos } from "../utils/handle-form-field";
-import { typeLikeHuman } from '../utils/input-simulation';
-import { sleep } from '../utils/sleep';
+import { defineContentScript } from 'wxt/utils/define-content-script';
+import { browser } from 'wxt/browser';
+import { findLabelByText } from '@/utils/find-label-by';
+import { handleAutosuggestDropdown, handleCheckbox, handleDropdown, handlePhotos } from '@/utils/handle-form-field';
+import { typeLikeHuman } from '@/utils/input-simulation';
+import { sleep } from '@/utils/sleep';
+
+const TARGET_URL = 'https://www.facebook.com/marketplace/create/vehicle';
 
 async function processItem(item) {
     // 1. Vehicle Type
@@ -50,17 +54,16 @@ async function processItem(item) {
     if (textarea) {
         await typeLikeHuman(textarea, item.description);
     }
-    
-    return true; 
+
+    return true;
 }
 
-// 8. Helper to click buttons
 async function clickButton(label) {
     console.log(`Waiting for ${label} button...`);
     for (let i = 0; i < 50; i++) { // Max 25 seconds
         const buttons = Array.from(document.querySelectorAll('[role="button"]'));
         const button = buttons.find(btn => btn.innerText.includes(label) || btn.getAttribute('aria-label') === label);
-        
+
         if (button) {
             const isDisabled = button.getAttribute('aria-disabled') === 'true';
             if (!isDisabled) {
@@ -93,21 +96,21 @@ async function runAutomation(itemsToProcess, startIndex, results) {
 
     for (let i = currentIndex; i < itemsToProcess.length; i++) {
         // 1. Ensure we are on the creation page before starting each item
-        if (!window.location.href.includes("https://www.facebook.com/marketplace/create/vehicle")) {
+        if (!window.location.href.includes(TARGET_URL)) {
             console.log("Navigating to creation page...");
-            window.location.href = "https://www.facebook.com/marketplace/create/vehicle";
+            window.location.href = TARGET_URL;
             // Important: We must not continue until the page reloads
             return;
         }
 
         const item = itemsToProcess[i];
         console.log(`Processing item ${item.id} (${i + 1}/${itemsToProcess.length})`);
-        
+
         try {
             // Check if form is actually loaded before processing
-            await sleep(2000); 
+            await sleep(2000);
             await processItem(item);
-            
+
             // Sequential button clicks
             if (await clickButton('Next')) {
                 await sleep(2000);
@@ -115,7 +118,7 @@ async function runAutomation(itemsToProcess, startIndex, results) {
                     console.log(`Item ${item.id} published successfully.`);
                     currentResults.push({ id: item.id, status: "Success" });
                     // Wait for redirect to finish before moving to next item
-                    await sleep(8000); 
+                    await sleep(8000);
                 } else {
                     throw new Error("Publish button not found/enabled");
                 }
@@ -126,36 +129,41 @@ async function runAutomation(itemsToProcess, startIndex, results) {
             console.error(`Error processing item ${item.id}:`, error);
             currentResults.push({ id: item.id, status: "Failed" });
         }
-        
+
         // Save progress for the *next* iteration
-        await chrome.storage.local.set({ currentIndex: i + 1, results: currentResults });
+        await browser.storage.local.set({ currentIndex: i + 1, results: currentResults });
         await sleep(2000);
     }
 
     // Automation complete
     await generateCSV(currentResults);
-    await chrome.storage.local.remove(['items', 'currentIndex', 'results']);
+    await browser.storage.local.remove(['items', 'currentIndex', 'results']);
     console.log("Automation Complete");
 }
 
 async function init() {
-    const data = await chrome.storage.local.get(['items', 'currentIndex', 'results']);
-    if (data.items && window.location.href.includes("https://www.facebook.com/marketplace/create/vehicle")) {
+    const data = await browser.storage.local.get(['items', 'currentIndex', 'results']);
+    if (data.items && window.location.href.includes(TARGET_URL)) {
         console.log("Resuming automation...");
         await runAutomation(data.items, data.currentIndex, data.results);
     }
 }
 
-// --- MAIN EXECUTION ---
-chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
-    if (request.action === "START_AUTOMATION") {
-        const data = await chrome.storage.local.get(['items', 'currentIndex', 'results']);
-        if (data.items) {
-            await runAutomation(data.items, data.currentIndex || 0, data.results || []);
-            sendResponse({ status: "Complete" });
-        }
-    }
-    return true;
-});
+export default defineContentScript({
+    matches: ['https://www.facebook.com/marketplace/create/*'],
+    async main() {
+        // --- MESSAGE HANDLER ---
+        browser.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+            if (request.action === "START_AUTOMATION") {
+                const data = await browser.storage.local.get(['items', 'currentIndex', 'results']);
+                if (data.items) {
+                    await runAutomation(data.items, data.currentIndex || 0, data.results || []);
+                    sendResponse({ status: "Complete" });
+                }
+            }
+            return true;
+        });
 
-init();
+        init();
+    },
+});
