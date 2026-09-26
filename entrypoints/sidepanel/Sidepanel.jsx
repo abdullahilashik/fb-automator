@@ -5,49 +5,9 @@ import AuthModal from "./AuthModal";
 import Settings from "./pages/Settings";
 import Listing, { buildVehicles } from "./pages/Listing";
 import NotConnected from "./pages/NotConnected";
+import { DEFAULT_ITEMS } from "@/utils/default-items";
 
 const TARGET_URL = "https://www.facebook.com/marketplace/create/vehicle";
-
-const DEFAULT_ITEMS = [
-  {
-    id: 1,
-    vehicleType: "Car/van",
-    imageUrls: ["https://picsum.photos/800/600"],
-    location: "Sydney, New South Wales, Australia",
-    year: "2021",
-    make: "Ford",
-    model: "F-150",
-    mileage: "25000",
-    price: "45000",
-    fuelType: "Petrol",
-    transmission: "Automatic transmission",
-    bodyStyle: "Van",
-    condition: "Excellent",
-    exteriorColour: "Black",
-    interiorColour: "Black",
-    cleanTitle: true,
-    description: "Excellent condition, one owner, smoke-free.",
-  },
-  {
-    id: 2,
-    vehicleType: "Car/van",
-    imageUrls: ["https://picsum.photos/800/600"],
-    location: "Melbourne, Victoria, Australia",
-    year: "2022",
-    make: "Toyota",
-    model: "Camry",
-    mileage: "15000",
-    price: "35000",
-    fuelType: "Hybrid",
-    transmission: "Automatic transmission",
-    bodyStyle: "Van",
-    condition: "Like new",
-    exteriorColour: "White",
-    interiorColour: "Grey",
-    cleanTitle: true,
-    description: "Great car, fuel efficient, low mileage.",
-  },
-];
 
 const Sidepanel = () => {
   const [items, setItems] = useState([]);
@@ -96,6 +56,28 @@ const Sidepanel = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Live-update when items are appended externally (e.g. index.html postMessage feed).
+  useEffect(() => {
+    const listener = (changes, area) => {
+      if (area !== "local" || !changes.items) return;
+      const next = changes.items.newValue;
+      if (!Array.isArray(next)) return;
+      setItems(next);
+      setSelectedIds((prev) => {
+        if (prev.size === 0) return new Set(next.map((it) => it.id));
+        const ids = new Set(next.map((it) => it.id));
+        const kept = new Set([...prev].filter((id) => ids.has(id)));
+        // Auto-select newly arrived ids so they are included by default.
+        next.forEach((it) => {
+          if (!prev.has(it.id)) kept.add(it.id);
+        });
+        return kept;
+      });
+    };
+    browser.storage.onChanged.addListener(listener);
+    return () => browser.storage.onChanged.removeListener(listener);
+  }, []);
 
   useEffect(() => {
     if (!running) return;
