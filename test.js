@@ -25,6 +25,9 @@ window.addEventListener("message", function (event) {
   if (d.ok) {
     // d.added; get the number of items appended
     // d.total; get the total items now
+    
+    // let me know if you need any more additional information other than added and total in post message
+    // acknoeledgemenet response
   } else {
     // get the error in d.error
   }
