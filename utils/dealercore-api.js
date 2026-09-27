@@ -205,8 +205,14 @@ export async function diagnoseDealercore(base) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** Find an open DealerCore tab for this origin, else open one. */
-async function ensureDealerCoreTab(base) {
+/**
+ * Find an open DealerCore tab for this origin.
+ *
+ * The automatic path must never hijack the user's window, so both
+ * `createIfMissing` and `focus` can be disabled: the tab is then only borrowed,
+ * never opened and never activated.
+ */
+async function ensureDealerCoreTab(base, { createIfMissing = true, focus = true } = {}) {
   const tabs = await browser.tabs.query({});
   const match = tabs.find((t) => {
     try {
@@ -216,11 +222,49 @@ async function ensureDealerCoreTab(base) {
     }
   });
   if (match?.id != null) {
-    await browser.tabs.update(match.id, { active: true });
+    if (focus) await browser.tabs.update(match.id, { active: true });
     return match.id;
   }
+  if (!createIfMissing) return null;
   const created = await browser.tabs.create({ url: base, active: true });
   return created?.id ?? null;
+}
+
+/**
+ * Locate the built bridge bundle from the manifest rather than hardcoding a
+ * path, so a rename or a WXT output change doesn't silently break injection.
+ */
+function bridgeScriptFiles() {
+  try {
+    const manifest = browser.runtime.getManifest();
+    const entry = (manifest.content_scripts || []).find((cs) =>
+      (cs.js || []).some((f) => /dealercore-bridge/.test(f)),
+    );
+    const files = (entry?.js || []).filter((f) => /dealercore-bridge/.test(f));
+    if (files.length) return files;
+  } catch {}
+  return ['content-scripts/dealercore-bridge.js'];
+}
+
+/**
+ * Inject the handshake bridge into a tab that doesn't have it yet.
+ *
+ * This is what makes the silent path actually silent: Chrome only injects
+ * statically declared content scripts into pages loaded *after* the extension,
+ * so any DealerCore tab that was already open — the norm after a reload or an
+ * update — has no receiver and the handshake fails with nothing to show for it.
+ */
+async function ensureBridgeInjected(tabId) {
+  try {
+    await browser.scripting.executeScript({
+      target: { tabId, allFrames: false },
+      files: bridgeScriptFiles(),
+    });
+    return true;
+  } catch {
+    // Restricted page (chrome://, Web Store), or the host permission is gone.
+    return false;
+  }
 }
 
 /**
@@ -233,23 +277,41 @@ async function ensureDealerCoreTab(base) {
  * fetching from here, and we do it on demand: this works even after an
  * explicit sign-out suppressed the automatic handshake.
  */
-export async function connectViaSession() {
+export async function connectViaSession({ openTabIfMissing = true, focus = true } = {}) {
   const base = await getDealerCoreBaseUrl();
   // Explicit user action: re-arm the automatic handshake.
   await browser.storage.local.set({ dealercore_signed_out: false });
 
-  const tabId = await ensureDealerCoreTab(base);
+  const tabId = await ensureDealerCoreTab(base, {
+    createIfMissing: openTabIfMissing,
+    focus,
+  });
   if (tabId == null) {
-    throw new Error(`Could not open a DealerCore tab for ${base}.`);
+    throw new Error(
+      openTabIfMissing
+        ? `Could not open a DealerCore tab for ${base}.`
+        : `No open DealerCore tab for ${base}.`,
+    );
   }
 
-  // The content script may still be injecting; retry a few times.
+  // The bridge may not be present yet: it is a statically declared content
+  // script, so Chrome skips tabs that were already open. Inject on the first
+  // "no receiver" and retry immediately instead of stalling the spinner for
+  // seconds before telling the user to refresh a tab they never knew about.
   let result = null;
+  let injectTried = false;
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       result = await browser.tabs.sendMessage(tabId, { action: 'DC_RUN_HANDSHAKE' });
     } catch {
       result = null; // no receiver yet
+      if (!injectTried) {
+        injectTried = true;
+        if (await ensureBridgeInjected(tabId)) {
+          await sleep(150); // let the message listener register
+          continue;
+        }
+      }
     }
     if (result?.ok) break;
     if (result && result.unauthenticated) {
@@ -274,21 +336,75 @@ export async function connectViaSession() {
   return finalizeSession(base);
 }
 
-async function finalizeSession(base) {
-  const { token } = await getAccessToken(base);
-  if (!token) throw new Error('Handshake completed but no token was stored.');
-  const me = await fetchMe(base, token);
-  await browser.storage.local.set({
+/**
+ * Silent, non-intrusive connection attempt. Runs automatically when the
+ * sidepanel opens so the common case needs no button press.
+ *
+ * Deliberate constraints — this must never interrupt the user:
+ *   - never opens a browser tab
+ *   - never steals focus from the current tab
+ *   - never falls back to interactive OAuth (a window with no user action)
+ *   - honours an explicit sign-out
+ *   - never throws; reports a reason instead
+ *
+ * A still-valid token short-circuits the handshake entirely.
+ */
+export async function tryAutoConnect() {
+  try {
+    const { dealercore_signed_out: signedOut } = await browser.storage.local.get([
+      'dealercore_signed_out',
+    ]);
+    if (signedOut) return { ok: false, reason: 'Signed out.' };
+
+    const base = await getDealerCoreBaseUrl();
+    const { token } = await getAccessToken(base);
+    if (token) {
+      // Revalidate — a stale token must never read as "connected".
+      try {
+        const me = await fetchMe(base, token);
+        // Refresh the cached snapshot while we're here: a token minted by the
+        // Flow A button stores a minimal one, and nothing else would upgrade
+        // it, so dealer/branch would stay blank in the header and Settings.
+        await persistSessionSnapshot(base, me);
+        return { ok: true, base, me, via: 'existing-token' };
+      } catch {
+        // Token is dead; fall through and mint a fresh one.
+      }
+    }
+
+    const { base: usedBase, me } = await connectViaSession({
+      openTabIfMissing: false,
+      focus: false,
+    });
+    return { ok: true, base: usedBase, me, via: 'handshake' };
+  } catch (e) {
+    return { ok: false, reason: e?.message || String(e) };
+  }
+}
+
+/**
+ * Cache the session snapshot the sidepanel renders from. The token itself is
+ * stored separately per-origin; this is purely a convenience copy.
+ */
+function persistSessionSnapshot(base, me) {
+  return browser.storage.local.set({
     dealercore_signed_out: false,
     dealercore_session: {
-      user: me.user ?? null,
-      dealer: me.dealer ?? null,
-      branch: me.branch ?? null,
-      branches: me.branches ?? [],
+      user: me?.user ?? null,
+      dealer: me?.dealer ?? null,
+      branch: me?.branch ?? null,
+      branches: me?.branches ?? [],
       baseUrl: base,
       savedAt: Date.now(),
     },
   });
+}
+
+async function finalizeSession(base) {
+  const { token } = await getAccessToken(base);
+  if (!token) throw new Error('Handshake completed but no token was stored.');
+  const me = await fetchMe(base, token);
+  await persistSessionSnapshot(base, me);
   return { base, me };
 }
 

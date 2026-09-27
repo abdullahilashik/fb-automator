@@ -96,6 +96,7 @@
         <li><a href="#messages"            class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Message contracts</a></li>
         <li><a href="#unified-login"       class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">The login button</a></li>
         <li><a href="#flow-b"              class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Flow B · Silent handshake</a></li>
+        <li><a href="#auto-connect"         class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Auto-connect on open</a></li>
         <li><a href="#flow-a"              class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Flow A · Interactive OAuth</a></li>
         <li><a href="#lifecycle"           class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Token lifecycle</a></li>
         <li><a href="#signout"             class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Sign out</a></li>
@@ -193,11 +194,11 @@
     <h2 id="overview" class="anchor">Overview</h2>
     <p class="fileref">Defined in <b>utils/dealercore-config.js</b> · implemented across <b>utils/dealercore-api.js</b> and <b>entrypoints/dealercore-bridge.content.js</b></p>
     <p>
-      The extension never asks the user for a DealerCore password. Instead it piggybacks on
-      authentication the browser already performed, and only falls back to a visible OAuth
-      round-trip when that is not possible. Both flows converge on the same end state: a
-      DealerCore <strong>Bearer token</strong> in extension storage, plus a cached session
-      snapshot used purely for rendering the UI.
+      The extension never asks the user for a DealerCore password. Opening the sidepanel is usually
+      enough — it reuses the session the browser already holds. When that is not possible it falls
+      back to a visible OAuth round-trip, and only then does it need a click. Both flows converge on
+      the same end state: a DealerCore <strong>Bearer token</strong> in extension storage, plus a
+      cached session snapshot used purely for rendering the UI.
     </p>
 
     <div class="mt-5 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
@@ -304,11 +305,16 @@
               probeAuthorize <span class="text-slate-400">:107</span><br />
               explainProbe <span class="text-slate-400">:139</span><br />
               diagnoseDealercore <span class="text-slate-400">:175</span><br />
-              connectViaSession <span class="text-slate-400">:236</span><br />
-              launchOAuthLogin <span class="text-slate-400">:295</span><br />
-              authed <span class="text-slate-400">:345</span><br />
-              clearDealerCoreSession <span class="text-slate-400">:389</span><br />
-              verifySession <span class="text-slate-400">:407</span>
+              ensureDealerCoreTab <span class="text-slate-400">:215</span><br />
+              connectViaSession <span class="text-slate-400">:243</span><br />
+              tryAutoConnect <span class="text-slate-400">:304</span> <span class="text-emerald-600 dark:text-emerald-400">auto</span><br />
+              persistSessionSnapshot <span class="text-slate-400">:341</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              finalizeSession <span class="text-slate-400">:355</span><br />
+              launchOAuthLogin <span class="text-slate-400">:363</span><br />
+              persistSessionSnapshot <span class="text-slate-400">:341</span><br />
+              authed <span class="text-slate-400">:413</span><br />
+              clearDealerCoreSession <span class="text-slate-400">:457</span><br />
+              verifySession <span class="text-slate-400">:475</span>
             </td>
           </tr>
           <tr>
@@ -324,8 +330,28 @@
             </td>
           </tr>
           <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/sidepanel/pages/NotConnected.jsx</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Landing page. Renders one of three states from a single <code class="font-mono text-[11.5px]">status</code> prop.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              NotConnected <span class="text-slate-400">:14</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              connecting state <span class="text-slate-400">:41</span><br />
+              error state <span class="text-slate-400">:67</span><br />
+              idle / connect offer <span class="text-slate-400">:89</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/sidepanel/Sidepanel.jsx</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Owns the connection state machine and routes between landing page, listing and settings.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              connectStatus state <span class="text-slate-400">:94</span><br />
+              applySession <span class="text-slate-400">:99</span><br />
+              auto-connect effect <span class="text-slate-400">:111</span> <span class="text-emerald-600 dark:text-emerald-400">auto</span><br />
+              handleConnect <span class="text-slate-400">:239</span> <span class="text-emerald-600 dark:text-emerald-400">new</span>
+            </td>
+          </tr>
+          <tr>
             <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/sidepanel/AuthModal.jsx</td>
-            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Login UI and the handshake→OAuth decision chain.</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Login UI and the handshake→OAuth decision chain. Unchanged by auto-connect.</td>
             <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
               runOAuthFlow <span class="text-slate-400">:46</span><br />
               handleLogin <span class="text-slate-400">:65</span><br />
@@ -346,9 +372,11 @@
             <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/sidepanel/Sidepanel.jsx</td>
             <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Derives "connected" from real session state; orchestrates sign-out.</td>
             <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
-              connection derivation <span class="text-slate-400">:61</span><br />
-              storage listener <span class="text-slate-400">:101</span><br />
-              handleLogout <span class="text-slate-400">:184</span>
+              connection derivation <span class="text-slate-400">:65</span><br />
+              auto-connect effect <span class="text-slate-400">:87</span><br />
+              connecting placeholder <span class="text-slate-400">:344</span><br />
+              storage listener <span class="text-slate-400">:129</span><br />
+              handleLogout <span class="text-slate-400">:212</span>
             </td>
           </tr>
           <tr>
@@ -435,9 +463,12 @@
     <h2 id="unified-login" class="anchor">The login button</h2>
     <p class="fileref">entrypoints/sidepanel/<b>AuthModal.jsx</b> → <b>handleLogin()</b> :65 · <b>runOAuthFlow()</b> :46 · <b>handleTestFlowA()</b> :108</p>
     <p>
-      The modal exposes <strong>one</strong> primary action. Choosing a strategy is the
-      extension's job, not the user's. The chain lives in
-      <code class="font-mono text-[13px]">AuthModal.jsx → handleLogin()</code>.
+      There are two connect buttons, and the distinction matters. The landing page's
+      <strong>Connect with DealerCore</strong> is the primary path: it skips straight to Flow A
+      because <a href="#auto-connect" class="text-brand-600 underline dark:text-brand-400">auto-connect</a>
+      has already tried the silent handshake and come up empty. The chain below lives in the
+      <b>AuthModal</b>, reachable from the avatar menu, and is what you get if you want the
+      extension to choose. Choosing a strategy is the extension's job, not the user's.
     </p>
 
     <div class="mt-5 space-y-2.5">
@@ -485,7 +516,7 @@
 
     <!-- ───── flow B ───── -->
     <h2 id="flow-b" class="anchor">Flow B · Silent handshake</h2>
-    <p class="fileref">entrypoints/<b>dealercore-bridge.content.js</b> → <b>silentHandshake()</b> :13 · driven by utils/<b>dealercore-api.js</b> → <b>connectViaSession()</b> :236</p>
+    <p class="fileref">entrypoints/<b>dealercore-bridge.content.js</b> → <b>silentHandshake()</b> :13 · driven by utils/<b>dealercore-api.js</b> → <b>connectViaSession()</b> :243</p>
     <p class="text-[15px]">
       <span class="rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">Default path</span>
     </p>
@@ -551,8 +582,93 @@
     </div>
 
     <!-- ───── flow A ───── -->
+    <h3 id="auto-connect" class="anchor">Auto-connect on open</h3>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>tryAutoConnect()</b> :304 · <b>ensureDealerCoreTab()</b> :215 · entrypoints/sidepanel/<b>Sidepanel.jsx</b> :111</p>
+    <p>
+      Opening the sidepanel attempts the handshake on its own. In the common case the user never
+      touches a login button — the panel is simply already connected.
+    </p>
+
+    <p>The implementation makes four deliberate refusals, because an automatic action that can interrupt someone is worse than one extra click:</p>
+    <ul>
+      <li><strong>It never opens a tab.</strong> <code class="font-mono text-[13px]">ensureDealerCoreTab()</code> is called with <code class="font-mono text-[13px]">createIfMissing: false</code>. With no open DealerCore tab it gives up quietly instead of hijacking the window.</li>
+      <li><strong>It never steals focus.</strong> The same call passes <code class="font-mono text-[13px]">focus: false</code>, so an already-open DealerCore tab is borrowed in the background rather than activated.</li>
+      <li><strong>It never falls back to OAuth.</strong> Auto-connect is handshake-only. A login popup with no user action behind it is intrusive, so failure simply leaves the Login button visible.</li>
+      <li><strong>It honours sign-out.</strong> If <code class="font-mono text-[13px]">dealercore_signed_out</code> is set, auto-connect returns immediately — signing out actually sticks.</li>
+    </ul>
+
+    <p>
+      A stored token short-circuits the handshake, but it is revalidated against
+      <code class="font-mono text-[13px]">/api/v1/auth/me</code> first, so a stale token can never be
+      mistaken for a live session. A dead token falls through to a fresh handshake.
+    </p>
+
+    <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <pre class="nice-scroll overflow-x-auto bg-slate-900 p-4 font-mono text-[12.5px] leading-relaxed text-slate-100"><code><span class="text-sky-300">export async function</span> <span class="text-amber-300">tryAutoConnect</span>() {
+  <span class="text-sky-300">try</span> {
+    <span class="text-sky-300">const</span> { dealercore_signed_out: signedOut } = <span class="text-sky-300">await</span> browser.storage.local.<span class="text-amber-300">get</span>([<span class="text-emerald-300">'dealercore_signed_out'</span>]);
+    <span class="text-sky-300">if</span> (signedOut) <span class="text-sky-300">return</span> { ok: <span class="text-amber-300">false</span>, reason: <span class="text-emerald-300">'Signed out.'</span> };
+
+    <span class="text-sky-300">const</span> base = <span class="text-sky-300">await</span> <span class="text-amber-300">getDealerCoreBaseUrl</span>();
+    <span class="text-sky-300">const</span> { token } = <span class="text-sky-300">await</span> <span class="text-amber-300">getAccessToken</span>(base);
+    <span class="text-sky-300">if</span> (token) {
+        <span class="text-sky-300">try</span> { <span class="text-slate-500">// revalidate — a stale token is not a session</span>
+        <span class="text-sky-300">const</span> me = <span class="text-sky-300">await</span> <span class="text-amber-300">fetchMe</span>(base, token);
+        <span class="text-sky-300">await</span> <span class="text-amber-300">persistSessionSnapshot</span>(base, me);
+        <span class="text-sky-300">return</span> { ok: <span class="text-amber-300">true</span>, base, me, via: <span class="text-emerald-300">'existing-token'</span> };
+      } <span class="text-sky-300">catch</span> {} <span class="text-slate-500">// dead token → handshake below</span>
+    }
+
+    <span class="text-sky-300">const</span> { base: usedBase, me } = <span class="text-sky-300">await</span> <span class="text-amber-300">connectViaSession</span>({
+      openTabIfMissing: <span class="text-amber-300">false</span>,   <span class="text-slate-500">// never opens a tab</span>
+      focus: <span class="text-amber-300">false</span>,             <span class="text-slate-500">// never steals focus</span>
+    });
+    <span class="text-sky-300">return</span> { ok: <span class="text-amber-300">true</span>, base: usedBase, me, via: <span class="text-emerald-300">'handshake'</span> };
+  } <span class="text-sky-300">catch</span> (e) {
+    <span class="text-sky-300">return</span> { ok: <span class="text-amber-300">false</span>, reason: e?.message || <span class="text-amber-300">String</span>(e) };
+  }
+}</code></pre>
+    </div>
+
+    <div class="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+      <p class="text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        The landing page renders exactly one of three states from a single
+        <code class="font-mono text-[12px]">status</code> value, so there is no
+        separate "connecting" screen that could flash and vanish. It never throws,
+        so a failure can only ever move the page to <em>idle</em>.
+      </p>
+      <ul class="mt-3 space-y-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        <li>
+          <span class="font-semibold text-slate-800 dark:text-slate-200">connecting</span> —
+          set on open, and again for the duration of any connect attempt. Shows a spinner,
+          an indeterminate progress bar and the current phase as subtext.
+        </li>
+        <li>
+          <span class="font-semibold text-slate-800 dark:text-slate-200">idle</span> —
+          the silent attempt found nothing to work with. Offers
+          <em>Connect with DealerCore</em>. This is deliberately
+          <strong>not</strong> an error state: having no DealerCore tab open is normal on a
+          cold browser, and showing a red error for it would be alarming and wrong.
+        </li>
+        <li>
+          <span class="font-semibold text-slate-800 dark:text-slate-200">error</span> —
+          reserved for a real Flow A failure. Shows the server's actual message and a
+          <em>Try again</em> button.
+        </li>
+      </ul>
+      <p class="mt-3 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        Pressing <em>Connect with DealerCore</em> goes
+        <strong>straight to Flow A</strong> — it does not repeat the handshake, since
+        auto-connect has already had its chance. The error text is rendered
+        <code class="font-mono text-[12px]">pre-wrap</code> so the multi-line
+        <code class="font-mono text-[12px]">explainProbe()</code> output stays readable.
+        The <b>AuthModal</b> is a separate, unchanged entry point reachable from the
+        avatar menu.
+      </p>
+    </div>
+
     <h2 id="flow-a" class="anchor">Flow A · Interactive OAuth</h2>
-    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>createPkce()</b> :65 · <b>buildAuthorizeUrl()</b> :74 · <b>launchOAuthLogin()</b> :295 · surfaced by <b>explainProbe()</b> :139</p>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>createPkce()</b> :65 · <b>buildAuthorizeUrl()</b> :74 · <b>launchOAuthLogin()</b> :363 · surfaced by <b>explainProbe()</b> :139</p>
     <p class="text-[15px]">
       <span class="rounded-md bg-slate-200 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-700 dark:bg-slate-700 dark:text-slate-200">Fallback path</span>
     </p>
@@ -632,7 +748,7 @@
 
     <!-- ───── lifecycle ───── -->
     <h2 id="lifecycle" class="anchor">Token lifecycle</h2>
-    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>authed()</b> :345 · <b>getAccessToken()</b> :35 · <b>verifySession()</b> :407</p>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>authed()</b> :413 · <b>getAccessToken()</b> :35 · <b>verifySession()</b> :475</p>
     <p>Every authenticated call funnels through one wrapper, which is why a dead token can never leak into the UI as a stale success.</p>
 
     <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
@@ -739,11 +855,18 @@ npx wxt</code></pre>
       </table>
     </div>
 
-    <h3>Step 5 — Smoke-test both flows</h3>
+    <h3>Step 5 — Smoke-test the landing page</h3>
     <ol>
-      <li><strong>Handshake:</strong> sign in to the <em>main</em> DealerCore app, open the sidepanel, click <em>Login with DealerCore</em>. Expect an instant connection with no popup.</li>
-      <li><strong>OAuth:</strong> click <em>TEMP — Test Flow A</em>. Expect the DealerCore login page, then a successful token exchange.</li>
+      <li><strong>Silent path:</strong> sign in to the <em>main</em> DealerCore app, leave that tab open, then open the sidepanel. You should briefly see the spinner, then land straight on the listing view — no click, no popup.</li>
+      <li><strong>No DealerCore tab:</strong> close the DealerCore tab, clear the extension's storage, reopen the sidepanel. The spinner should settle on <em>Connect with DealerCore</em> — and crucially must <em>not</em> open a tab or show an error.</li>
+      <li><strong>Flow A:</strong> press <em>Connect with DealerCore</em>. Expect the DealerCore sign-in page, then a successful token exchange.</li>
+      <li><strong>Flow A failure:</strong> sign in with bad credentials. Expect a red <em>Couldn't connect</em> panel with the server's own message and a <em>Try again</em> button.</li>
+      <li><strong>Reuse:</strong> close and reopen the panel. A stored token should be revalidated and reused, with dealer and branch still populated in the header and Settings.</li>
     </ol>
+    <p class="text-[13px]">
+      To confirm the silent path is genuinely non-intrusive, watch for two things: no tab should
+      open, and focus should never leave the tab you were using.
+    </p>
 
     <!-- ───── reference ───── -->
     <h2 id="config" class="anchor">Configuration reference</h2>
@@ -781,8 +904,10 @@ npx wxt</code></pre>
         <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">getDealerCoreBaseUrl()</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Active origin, from the current tab when possible.</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">getAccessToken(base?)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px]">{ base, token }</code> for that origin.</td></tr>
-          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">connectViaSession()</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px]">{ base, me }</code> — Flow B.</td></tr>
-          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">launchOAuthLogin(base)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Access token — Flow A.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">tryAutoConnect()</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px]">{ ok, base?, me?, via? | reason }</code> — silent, never throws. See <a href="#auto-connect" class="text-brand-600 underline dark:text-brand-400">auto-connect</a>.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">connectViaSession(opts?)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px]">{ base, me }</code>. Accepts <code class="font-mono text-[12px]">openTabIfMissing</code> and <code class="font-mono text-[12px]">focus</code>.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">launchOAuthLogin(base)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Access token — Flow A. Opens the sign-in page, so it is only called from an explicit click.</td></tr>
+        <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">persistSessionSnapshot(base, me)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Internal. Caches the render-only session snapshot and clears the sign-out latch. Called by both <code class="font-mono text-[12px]">finalizeSession()</code> and the token-revalidation branch of <code class="font-mono text-[12px]">tryAutoConnect()</code>.</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">fetchMe(base, token)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">User, dealer and branch context.</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">verifySession()</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px]">{ connected, me?, reason? }</code>, flow-agnostic.</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">diagnoseDealercore(base)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Per-endpoint status report.</td></tr>
@@ -890,7 +1015,7 @@ npx wxt</code></pre>
     </div>
 
     <h2 id="errors" class="anchor">Error decoder</h2>
-    <p class="fileref">Messages produced by <b>explainProbe()</b> :139, <b>launchOAuthLogin()</b> :295 and <b>authed()</b> :345</p>
+    <p class="fileref">Messages produced by <b>explainProbe()</b> :139, <b>launchOAuthLogin()</b> :363 and <b>authed()</b> :413</p>
     <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
       <table class="min-w-full text-left text-sm">
         <thead class="bg-slate-50 dark:bg-slate-800/60">
@@ -937,6 +1062,7 @@ npx wxt</code></pre>
       <li><a href="#source-map" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Source map</a></li>
       <li><a href="#storage" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Storage &amp; keys</a></li>
       <li><a href="#flow-b" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Flow B · Silent handshake</a></li>
+      <li><a href="#auto-connect" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Auto-connect on open</a></li>
       <li><a href="#flow-a" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Flow A · Interactive OAuth</a></li>
       <li><a href="#setup" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Developer guide</a></li>
       <li><a href="#config" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Configuration</a></li>

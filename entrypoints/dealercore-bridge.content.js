@@ -99,6 +99,14 @@ export default defineContentScript({
     'http://localhost/*',
   ],
   async main() {
+    // The sidepanel can inject this file on demand (see ensureBridgeInjected in
+    // dealercore-api.js) because Chrome never injects statically declared
+    // content scripts into tabs that predate the extension load. Registering
+    // the listeners twice would make every runtime.sendMessage resolve ambiguously,
+    // so bail out if this tab is already wired up.
+    if (window.__DC_BRIDGE_READY__) return;
+    window.__DC_BRIDGE_READY__ = true;
+
     const baseUrl = window.location.origin;
     await browser.storage.local.set({ dealercore_base_url: baseUrl });
     // Fire-and-forget: never block page load on handshake.

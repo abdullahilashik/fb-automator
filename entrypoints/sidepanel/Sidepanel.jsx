@@ -6,7 +6,14 @@ import Settings from "./pages/Settings";
 import Listing, { buildVehicles } from "./pages/Listing";
 import NotConnected from "./pages/NotConnected";
 import { DEFAULT_ITEMS } from "@/utils/default-items";
-import { getAccessToken, fetchMe, clearDealerCoreSession } from "@/utils/dealercore-api";
+import {
+  getAccessToken,
+  fetchMe,
+  clearDealerCoreSession,
+  tryAutoConnect,
+  getDealerCoreBaseUrl,
+  launchOAuthLogin,
+} from "@/utils/dealercore-api";
 
 const TARGET_URL = "https://www.facebook.com/marketplace/create/vehicle";
 
@@ -79,6 +86,51 @@ const Sidepanel = () => {
       }
     })();
   }, [loadData]);
+
+  // ── Landing-page connection state machine ──
+  // idle       → silent attempt found nothing; show "Connect with DealerCore"
+  // connecting → a silent attempt or Flow A is in flight; show progress
+  // error      → Flow A was tried and failed; show why, offer a retry
+  const [connectStatus, setConnectStatus] = useState("connecting");
+  const [connectMessage, setConnectMessage] = useState(
+    "Checking your active DealerCore session…",
+  );
+
+  const applySession = (result) => {
+    setAuth({
+      token: result.token ?? null,
+      baseUrl: result.base,
+      user: result.me?.user ?? null,
+      dealer: result.me?.dealer ?? null,
+      branch: result.me?.branch ?? null,
+      branches: result.me?.branches ?? [],
+    });
+    setIsConnected(true);
+  };
+
+  // Silent auto-connect: on open, try the handshake with no user interaction.
+  // Never opens a tab, never steals focus, never pops the OAuth window — it
+  // just means the common case is already connected before the user looks.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setConnectStatus("connecting");
+      setConnectMessage("Checking your active DealerCore session…");
+      const result = await tryAutoConnect();
+      if (cancelled) return;
+      if (!result.ok) {
+        // Expected on a cold browser: no DealerCore tab, or signed out.
+        // Not an error — just offer the connect button.
+        setConnectStatus("idle");
+        return;
+      }
+      applySession(result);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Live-update when items are appended externally (e.g. index.html postMessage feed).
   useEffect(() => {
@@ -181,6 +233,23 @@ const Sidepanel = () => {
     setIsConnected(true);
   };
 
+  // Landing-page "Connect with DealerCore" → Flow A (interactive OAuth).
+  // The silent handshake already had its chance in the auto-connect effect, so
+  // this goes straight to OAuth rather than repeating it.
+  const handleConnect = async () => {
+    setConnectStatus("connecting");
+    setConnectMessage("Opening DealerCore sign-in…");
+    try {
+      const base = await getDealerCoreBaseUrl();
+      const token = await launchOAuthLogin(base);
+      const me = await fetchMe(base, token);
+      applySession({ token, base, me });
+    } catch (e) {
+      setConnectMessage(e?.message || "Login failed.");
+      setConnectStatus("error");
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await clearDealerCoreSession();
@@ -188,6 +257,8 @@ const Sidepanel = () => {
     setAuth(null);
     setIsConnected(false);
     setAvatarMenuOpen(false);
+    // Sign-out latches the silent handshake off, so don't immediately retry it.
+    setConnectStatus("idle");
     toast.success("Signed out");
   };
 
@@ -311,6 +382,8 @@ const Sidepanel = () => {
     toast.success("Draft saved");
   };
 
+  // The landing page owns its own progress state, so there is no separate
+  // full-screen placeholder here — that would duplicate the in-page spinner.
   if (!isConnected)
     return (
       <div className="h-full w-full bg-gray-200 dark:bg-gray-950 flex flex-col overflow-hidden">
@@ -327,7 +400,9 @@ const Sidepanel = () => {
           onLogout={handleLogout}
           onRefresh={loadData}
           onOpenSettings={() => setView("settings")}
-          onConnectHandle={setIsConnected}
+          status={connectStatus}
+          message={connectMessage}
+          onConnect={handleConnect}
         />
       </div>
     )
