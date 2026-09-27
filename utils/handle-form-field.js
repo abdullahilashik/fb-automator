@@ -3,13 +3,15 @@ import { typeLikeHuman } from "./input-simulation";
 import { sleep } from "./sleep";
 
 // Handle Facebook's custom Dropdowns
-export const handleDropdown = async (labelName, optionText) => {
+export const handleDropdown = async (labelName, optionText, shouldAbort) => {
     if (!optionText) return;
+    if (shouldAbort?.()) return;
     const label = findLabelByText(labelName);
     if (!label) return console.log(`Skipping ${labelName}: Field not found.`);
 
     label.click();
     await sleep(800); // Wait for menu
+    if (shouldAbort?.()) return;
 
     const options = Array.from(document.querySelectorAll('[role="option"]'));
     const target = options.find(opt =>
@@ -23,8 +25,9 @@ export const handleDropdown = async (labelName, optionText) => {
 };
 
 // handle location dropdown
-export const handleAutosuggestDropdown = async (locationText) => {
+export const handleAutosuggestDropdown = async (locationText, shouldAbort) => {
     if (!locationText) return;
+    if (shouldAbort?.()) return;
     const label = findLabelByText('Location');
     const input = label?.querySelector('input');
     if (!input) return;
@@ -33,12 +36,13 @@ export const handleAutosuggestDropdown = async (locationText) => {
     input.focus();
     input.value = "";
     for (let i = 0; i < locationText.length; i++) {
+        if (shouldAbort?.()) return;
         input.value = locationText.substring(0, i + 1);
         input.dispatchEvent(new InputEvent('input', { bubbles: true, data: locationText[i] }));
         await sleep(Math.random() * 50 + 30);
     }
     input.dispatchEvent(new Event('change', { bubbles: true }));
-    
+
     // Wait for the listbox to appear
     await sleep(1500);
 
@@ -63,6 +67,7 @@ export const handleAutosuggestDropdown = async (locationText) => {
     // If no suggestions, try shorter text
     let currentText = locationText;
     while (options.length === 0 && currentText.length > 2) {
+        if (shouldAbort?.()) return;
         currentText = currentText.slice(0, -1);
         input.value = currentText;
         input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -134,13 +139,15 @@ export const handleCheckbox = async (labelText) => {
 };
 
 // Handle Photo Uploads (via DataTransfer)
-export const handlePhotos = async (urls) => {
+export const handlePhotos = async (urls, shouldAbort) => {
     if (!urls || urls.length === 0) return;
+    if (shouldAbort?.()) return;
     const fileInput = document.querySelector('input[type="file"][accept*="image"]');
     if (!fileInput) return;
 
     const dataTransfer = new DataTransfer();
     for (const url of urls) {
+        if (shouldAbort?.()) return;
         try {
             const resp = await fetch(url);
             const blob = await resp.blob();
@@ -150,6 +157,7 @@ export const handlePhotos = async (urls) => {
             console.error("Image fetch failed", e);
         }
     }
+    if (shouldAbort?.()) return;
     fileInput.files = dataTransfer.files;
     fileInput.dispatchEvent(new Event('change', { bubbles: true }));
 };

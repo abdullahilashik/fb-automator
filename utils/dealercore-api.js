@@ -175,6 +175,95 @@ export async function diagnoseDealercore(base) {
   return { origin, redirectUri: redirectUri(), results };
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Find an open DealerCore tab for this origin, else open one. */
+async function ensureDealerCoreTab(base) {
+  const tabs = await browser.tabs.query({});
+  const match = tabs.find((t) => {
+    try {
+      return new URL(t.url).origin === base;
+    } catch {
+      return false;
+    }
+  });
+  if (match?.id != null) {
+    await browser.tabs.update(match.id, { active: true });
+    return match.id;
+  }
+  const created = await browser.tabs.create({ url: base, active: true });
+  return created?.id ?? null;
+}
+
+/**
+ * Flow B (auth-guide §3): connect using the user's active DealerCore session.
+ * No OAuth client required.
+ *
+ * The handshake MUST run from a DealerCore page (same-origin) so the session
+ * cookie is attached — a cross-site POST from the extension page would be
+ * dropped by SameSite rules. So we drive the bridge content script instead of
+ * fetching from here, and we do it on demand: this works even after an
+ * explicit sign-out suppressed the automatic handshake.
+ */
+export async function connectViaSession() {
+  const base = await getDealerCoreBaseUrl();
+  // Explicit user action: re-arm the automatic handshake.
+  await browser.storage.local.set({ dealercore_signed_out: false });
+
+  const tabId = await ensureDealerCoreTab(base);
+  if (tabId == null) {
+    throw new Error(`Could not open a DealerCore tab for ${base}.`);
+  }
+
+  // The content script may still be injecting; retry a few times.
+  let result = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      result = await browser.tabs.sendMessage(tabId, { action: 'DC_RUN_HANDSHAKE' });
+    } catch {
+      result = null; // no receiver yet
+    }
+    if (result?.ok) break;
+    if (result && result.unauthenticated) {
+      throw new Error(
+        `DealerCore reported no active session. Log in to ${base} in the tab that just opened (the main app, not /nova), then click this button again.`,
+      );
+    }
+    await sleep(800);
+  }
+
+  if (!result?.ok) {
+    // Last resort: the bridge may have completed the handshake but lost the
+    // reply (e.g. tab reloaded mid-flight). Check storage before failing.
+    const { token } = await getAccessToken(base);
+    if (!token) {
+      throw new Error(
+        `Could not complete the handshake with ${base}. Make sure the page is fully loaded and you are signed in, then try again.`,
+      );
+    }
+    return finalizeSession(base);
+  }
+  return finalizeSession(base);
+}
+
+async function finalizeSession(base) {
+  const { token } = await getAccessToken(base);
+  if (!token) throw new Error('Handshake completed but no token was stored.');
+  const me = await fetchMe(base, token);
+  await browser.storage.local.set({
+    dealercore_signed_out: false,
+    dealercore_session: {
+      user: me.user ?? null,
+      dealer: me.dealer ?? null,
+      branch: me.branch ?? null,
+      branches: me.branches ?? [],
+      baseUrl: base,
+      savedAt: Date.now(),
+    },
+  });
+  return { base, me };
+}
+
 export async function launchOAuthLogin(base) {
   assertClientConfigured();
   const origin = normalizeBaseUrl(base);
@@ -218,6 +307,7 @@ export async function launchOAuthLogin(base) {
   if (!token) throw new Error('No access token in response.');
   await browser.storage.local.set({
     dealercore_base_url: origin,
+    dealercore_signed_out: false,
     [tokenKeyFor(origin)]: token,
     dealercore_session: { ...(data.user ? { user: data.user } : {}), savedAt: Date.now() },
   });
@@ -269,9 +359,33 @@ export async function writeBackSync({ vehicle_id, status, account_id, post_id, p
 }
 
 export async function clearDealerCoreSession() {
-  const stored = await browser.storage.local.get(['dealercore_base_url']);
-  const base = stored.dealercore_base_url;
-  const keys = ['dealercore_session'];
-  if (base) keys.push(tokenKeyFor(base));
+  // Remove tokens for EVERY known environment, not just the active one, so a
+  // stale token can't silently reconnect after switching domains.
+  const all = await browser.storage.local.get(null);
+  const keys = Object.keys(all).filter((k) => k.startsWith('token_'));
+  keys.push('dealercore_session', 'auth');
   await browser.storage.local.remove(keys);
+  // Suppress the silent handshake until the user explicitly connects again,
+  // otherwise any DealerCore tab would instantly restore the session.
+  await browser.storage.local.set({ dealercore_signed_out: true });
+  return keys.length;
+}
+
+/**
+ * Validate the stored session regardless of how it was obtained
+ * (OAuth code exchange or silent handshake). Works off the per-domain token,
+ * never off the UI's `auth` object, which has no token in handshake mode.
+ */
+export async function verifySession() {
+  const base = await getDealerCoreBaseUrl();
+  const { token } = await getAccessToken(base);
+  if (!token) {
+    return { base, connected: false, reason: 'No token stored for this environment.' };
+  }
+  try {
+    const me = await fetchMe(base, token);
+    return { base, connected: true, me };
+  } catch (e) {
+    return { base, connected: false, reason: e?.message || String(e) };
+  }
 }

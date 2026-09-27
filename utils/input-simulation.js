@@ -1,11 +1,14 @@
 import { sleep } from "./sleep";
 
-// Simulate human typing
-export const typeLikeHuman = async (input, text) => {
+// Simulate human typing. Pass `shouldAbort` to bail out mid-field so a
+// cancel request isn't blocked by a long description.
+export const typeLikeHuman = async (input, text, shouldAbort) => {
     if (!input) return;
+    if (shouldAbort?.()) return;
     input.focus();
     input.value = "";
     for (let char of text.toString()) {
+        if (shouldAbort?.()) return;
         input.value += char;
         input.dispatchEvent(new InputEvent('input', { bubbles: true, data: char }));
         await sleep(Math.random() * 40 + 20);

@@ -10,6 +10,12 @@ export const DEALERCORE_CONFIG = {
   PROD_DOMAIN: 'https://dealercore.com.au',
   // chrome.identity redirect — extension id is filled in at runtime.
   REDIRECT_PATH: '/',
+  // Silent handshake: sending client_id makes DealerCore verify the client is
+  // active AND marked First Party. That check fails until the client is
+  // flagged, so we omit client_id by default and rely on the session cookie
+  // (auth-guide §3 Flow B lists client_id as optional). Set true once the
+  // client is marked First Party if you want the extra validation.
+  HANDSHAKE_SEND_CLIENT_ID: false,
 };
 
 export const DEALERCORE_HOSTS = {

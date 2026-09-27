@@ -11,6 +11,7 @@ import {
   openAuthInTab,
   getRedirectUri,
   diagnoseDealercore,
+  connectViaSession,
 } from "@/utils/dealercore-api";
 
 const AuthModal = ({ open, onClose, onSuccess, dark }) => {
@@ -69,6 +70,27 @@ const AuthModal = ({ open, onClose, onSuccess, dark }) => {
     }
   };
 
+  const handleConnectSession = async () => {
+    setError("");
+    setBusy(true);
+    try {
+      const { base: usedBase, me } = await connectViaSession();
+      onSuccess({
+        token: null,
+        baseUrl: usedBase,
+        user: me.user ?? null,
+        dealer: me.dealer ?? null,
+        branch: me.branch ?? null,
+        branches: me.branches ?? [],
+      });
+      toast.success("Connected via active DealerCore session");
+    } catch (e) {
+      setError(e.message || "Could not connect via session.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleDiagnose = async () => {
     setError("");
     setBusy(true);
@@ -124,8 +146,7 @@ const AuthModal = ({ open, onClose, onSuccess, dark }) => {
             {base}
           </p>
 
-          {DEALERCORE_CONFIG.CLIENT_ID ===
-            "YOUR_FIRST_PARTY_CLIENT_ID_TEST" && (
+          {DEALERCORE_CONFIG.CLIENT_ID.startsWith("YOUR_FIRST_PARTY") && (
             <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
               Set <span className="font-mono">CLIENT_ID</span> in{" "}
               <span className="font-mono">utils/dealercore-config.js</span>{" "}
@@ -162,6 +183,29 @@ const AuthModal = ({ open, onClose, onSuccess, dark }) => {
               </div>
             </div>
           )}
+
+          <button
+            onClick={handleConnectSession}
+            disabled={busy}
+            className="w-full text-sm bg-white dark:bg-gray-800 border border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-300 font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all hover:bg-sky-50 dark:hover:bg-gray-700 disabled:opacity-60"
+          >
+            {busy ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <ShieldCheck className="w-4 h-4" />
+            )}
+            Use my active DealerCore session
+          </button>
+          <p className="mt-1.5 mb-3 text-[10px] text-gray-400 text-center">
+            Fastest path — log into the DealerCore app (not Nova) in a tab; the
+            extension grabs a Bearer token via the silent handshake.
+          </p>
+
+          <div className="flex items-center gap-2 mb-3">
+            <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+            <span className="text-[10px] text-gray-400">or use OAuth</span>
+            <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+          </div>
 
           <button
             onClick={handleLogin}

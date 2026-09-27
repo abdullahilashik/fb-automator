@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { browser } from "wxt/browser";
 import {
-  ArrowLeft, Bug, ExternalLink, ListChecks, LogIn, Monitor, Moon,
+  ArrowLeft, Bug, ExternalLink, ListChecks, LogIn, LogOut, Monitor, Moon,
   PlusCircle, RefreshCw, ShieldCheck, ShoppingBag, Sun,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { verifySession } from "@/utils/dealercore-api";
 
 const scrapeFbProfile = () => {
   const img =
@@ -37,11 +38,15 @@ const QUICK_LINKS = [
   },
 ];
 
-const Settings = ({ theme, onThemeChange, auth, onOpenAuth, onBack }) => {
+const Settings = ({ theme, onThemeChange, auth, onOpenAuth, onLogout, onBack }) => {
   const [fb, setFb] = useState({ state: "loading", name: null, avatar: null, userId: null });
   const [bugMessage, setBugMessage] = useState("");
+  const [checkingDc, setCheckingDc] = useState(false);
 
-  const dcConnected = !!auth?.token && !!auth?.user;
+  // Auth-method agnostic: handshake connections carry no token on `auth`
+  // (the token lives under token_<origin>), so detect on identity, not token.
+  const dcConnected = !!(auth?.user || auth?.dealer || auth?.branch);
+  const authMethod = auth?.token ? "OAuth" : dcConnected ? "Active session" : null;
 
   const checkFacebook = useCallback(async () => {
     setFb({ state: "loading", name: null, avatar: null, userId: null });
@@ -83,8 +88,24 @@ const Settings = ({ theme, onThemeChange, auth, onOpenAuth, onBack }) => {
     checkFacebook();
   }, [checkFacebook]);
 
-  const submitBug = () => {
-    if (!bugMessage.trim()) {
+  const checkDealerCore = async () => {
+    setCheckingDc(true);
+    try {
+      const result = await verifySession();
+      if (result.connected) {
+        const who = result.me?.user?.name || result.me?.user?.email || "user";
+        toast.success(`Connected as ${who} (${result.base})`);
+      } else {
+        toast.error(`Not connected — ${result.reason}`);
+      }
+    } catch (e) {
+      toast.error(e?.message || "Connection check failed.");
+    } finally {
+      setCheckingDc(false);
+    }
+  };
+
+  const submitBug = () => {    if (!bugMessage.trim()) {
       toast.error("Describe the problem first");
       return;
     }
@@ -235,7 +256,7 @@ const Settings = ({ theme, onThemeChange, auth, onOpenAuth, onBack }) => {
               </div>
 
               {dcConnected ? (
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 mb-2">
                   <div className="w-8 h-8 rounded-full bg-sky-600 text-white flex items-center justify-center text-sm font-semibold">
                     {auth.user?.name?.charAt(0)?.toUpperCase() || "?"}
                   </div>
@@ -254,29 +275,45 @@ const Settings = ({ theme, onThemeChange, auth, onOpenAuth, onBack }) => {
                 </p>
               )}
 
-              {!dcConnected && (
-                <button
-                  onClick={onOpenAuth}
-                  className="w-full flex items-center justify-center gap-1.5 text-[12px] font-bold text-white bg-[#00a2e8] hover:bg-[#008bc9] py-2 rounded-lg transition-all"
-                >
-                  <LogIn className="w-3.5 h-3.5" /> Sign in to DealerCore
-                </button>
+              {dcConnected && (
+                <div className="text-[10px] text-gray-500 dark:text-gray-400 space-y-0.5 mb-2">
+                  {authMethod && (
+                    <p>
+                      Method: <span className="font-semibold">{authMethod}</span>
+                    </p>
+                  )}
+                  {auth?.baseUrl && <p className="font-mono break-all">{auth.baseUrl}</p>}
+                  {auth?.dealer?.name && <p>Dealer: {auth.dealer.name}</p>}
+                  {auth?.branch?.name && <p>Branch: {auth.branch.name}</p>}
+                </div>
               )}
 
-              <button
-                onClick={() => {
-                  browser.storage.local.get("auth").then(({ auth: storedAuth }) => {
-                    if (storedAuth?.token) {
-                      toast.success(`Token ready (${storedAuth.token.split(".")[0]}…)`);
-                    } else {
-                      toast.error("No token — sign in first");
-                    }
-                  });
-                }}
-                className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-blue-500 hover:text-blue-600 transition-colors"
-              >
-                <RefreshCw className="w-3 h-3" /> Check token
-              </button>
+              <div className="flex gap-2">
+                {!dcConnected && (
+                  <button
+                    onClick={onOpenAuth}
+                    className="flex-1 flex items-center justify-center gap-1.5 text-[12px] font-bold text-white bg-[#00a2e8] hover:bg-[#008bc9] py-2 rounded-lg transition-all"
+                  >
+                    <LogIn className="w-3.5 h-3.5" /> Sign in to DealerCore
+                  </button>
+                )}
+                {dcConnected && (
+                  <button
+                    onClick={onLogout}
+                    className="flex-1 flex items-center justify-center gap-1.5 text-[12px] font-bold text-red-500 border border-red-300 dark:border-red-900 hover:bg-red-50 dark:hover:bg-red-950/40 py-2 rounded-lg transition-all"
+                  >
+                    <LogOut className="w-3.5 h-3.5" /> Sign out
+                  </button>
+                )}
+                <button
+                  onClick={checkDealerCore}
+                  disabled={checkingDc}
+                  className="flex items-center gap-1.5 text-[11px] font-semibold text-blue-500 hover:text-blue-600 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3 h-3 ${checkingDc ? "animate-spin" : ""}`} />
+                  Verify
+                </button>
+              </div>
             </div>
           </div>
         </section>

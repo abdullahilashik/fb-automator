@@ -25,6 +25,7 @@ const Sidepanel = () => {
   const [dark, setDark] = useState(false);
   const avatarMenuRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const vehicles = useMemo(
     () => buildVehicles(items, results, currentIndex, running),
@@ -104,7 +105,7 @@ const Sidepanel = () => {
   useEffect(() => {
     if (!running) return;
     const timer = setInterval(async () => {
-      const data = await browser.storage.local.get(["items", "results", "currentIndex"]);
+      const data = await browser.storage.local.get(["items", "results", "currentIndex", "automation_state"]);
       if (Array.isArray(data.items)) {
         setItems(data.items);
       }
@@ -120,6 +121,11 @@ const Sidepanel = () => {
         setCurrentIndex(data.currentIndex);
       }
       if (data.items === undefined && data.results === undefined) {
+        setRunning(false);
+      }
+      // The queue is cleared on cancel/complete, so treat the phase as
+      // authoritative for stopping the "running" state.
+      if (data.automation_state?.phase === "cancelled" || data.automation_state?.phase === "complete") {
         setRunning(false);
       }
     }, 1500);
@@ -218,7 +224,10 @@ const Sidepanel = () => {
       items: selectedItems,
       currentIndex: 0,
       results: [],
+      // Fresh run clears any previous cancel request.
+      automation_state: { phase: "running", cancelRequested: false },
     });
+    setCancelling(false);
 
     const itemIds = new Set(selectedItems.map((it) => it.id));
     setItems(selectedItems);
@@ -244,6 +253,52 @@ const Sidepanel = () => {
     }
 
     toast.success(`Publishing ${selectedItems.length} vehicle(s)`);
+  };
+
+  const cancelAutomation = async () => {
+    if (cancelling) return;
+    setCancelling(true);
+    try {
+      // The content script mirrors this flag and bails at its next checkpoint.
+      await browser.storage.local.set({
+        automation_state: { phase: "cancelling", cancelRequested: true },
+      });
+
+      // If the Facebook tab was closed there is no script to acknowledge, so
+      // clear the queue ourselves after a grace period.
+      const cleared = await new Promise((resolve) => {
+        const startedAt = Date.now();
+        const timer = setInterval(async () => {
+          const data = await browser.storage.local.get([
+            "items",
+            "automation_state",
+          ]);
+          if (!data.items) {
+            clearInterval(timer);
+            resolve(true);
+          } else if (Date.now() - startedAt > 8000) {
+            clearInterval(timer);
+            resolve(false);
+          }
+        }, 400);
+      });
+
+      if (!cleared) {
+        await browser.storage.local.remove(["items", "currentIndex", "results"]);
+        toast("Automation stopped. The Facebook tab may still be finishing a publish.");
+      } else {
+        toast.success("Automation cancelled");
+      }
+      setRunning(false);
+      setResults([]);
+      setCurrentIndex(0);
+      const { items: latest } = await browser.storage.local.get(["items"]);
+      if (Array.isArray(latest)) setItems(latest);
+    } catch (e) {
+      toast.error(e?.message || "Could not cancel");
+    } finally {
+      setCancelling(false);
+    }
   };
 
   const saveDraft = async () => {
@@ -285,6 +340,7 @@ const Sidepanel = () => {
           onThemeChange={handleThemeChange}
           auth={auth}
           onOpenAuth={() => setAuthModalOpen(true)}
+          onLogout={handleLogout}
           onBack={() => setView("main")}
         />
       ) : (
@@ -310,6 +366,8 @@ const Sidepanel = () => {
           onToggleAll={toggleAll}
           onClearSelection={clearSelection}
           onStartAutomation={startAutomation}
+          onCancelAutomation={cancelAutomation}
+          cancelling={cancelling}
           onSaveDraft={saveDraft}
         />
       )}
