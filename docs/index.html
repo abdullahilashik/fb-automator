@@ -50,6 +50,17 @@
   /* nav active state */
   .navlink.active { background: rgb(239 246 255); color: rgb(21 94 175); font-weight: 600; }
   .dark .navlink.active { background: rgb(30 58 138 / .45); color: rgb(147 197 253); }
+  /* file reference line under a heading */
+  .fileref {
+    margin-top: .5rem;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: rgb(100 116 139);
+  }
+  .dark .fileref { color: rgb(148 163 184); }
+  .fileref b { color: rgb(30 64 175); font-weight: 600; }
+  .dark .fileref b { color: rgb(147 197 253); }
 </style>
 </head>
 
@@ -80,6 +91,7 @@
       <ul class="mt-1 space-y-0.5 border-l-2 border-slate-200 pl-3 ml-3 dark:border-slate-800">
         <li><a href="#overview"            class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Overview</a></li>
         <li><a href="#architecture"        class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Architecture</a></li>
+        <li><a href="#source-map"          class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Source map</a></li>
         <li><a href="#storage"             class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Storage &amp; keys</a></li>
         <li><a href="#messages"            class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Message contracts</a></li>
         <li><a href="#unified-login"       class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">The login button</a></li>
@@ -179,6 +191,7 @@
 
     <!-- ───── overview ───── -->
     <h2 id="overview" class="anchor">Overview</h2>
+    <p class="fileref">Defined in <b>utils/dealercore-config.js</b> · implemented across <b>utils/dealercore-api.js</b> and <b>entrypoints/dealercore-bridge.content.js</b></p>
     <p>
       The extension never asks the user for a DealerCore password. Instead it piggybacks on
       authentication the browser already performed, and only falls back to a visible OAuth
@@ -208,6 +221,7 @@
 
     <!-- ───── architecture ───── -->
     <h2 id="architecture" class="anchor">Architecture</h2>
+    <p class="fileref">entrypoints/<b>dealercore-bridge.content.js</b> · entrypoints/<b>background.js</b> · entrypoints/sidepanel/<b>AuthModal.jsx</b> · utils/<b>dealercore-api.js</b></p>
     <p>Four extension surfaces cooperate. Only the content scripts may talk to DealerCore with cookies.</p>
 
     <div class="mt-5 grid gap-3 sm:grid-cols-2">
@@ -254,6 +268,120 @@
           wrapper, session validation, sign-out. Every network call to DealerCore lives here.
         </p>
       </div>
+    </div>
+
+    <h3 id="source-map" class="anchor">Source map</h3>
+    <p>
+      Every concept in this document maps to a specific file and function. Line numbers refer to the
+      current state of the repository and will drift as code changes — the symbols are the reliable anchor.
+    </p>
+
+    <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <table class="min-w-full text-left text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-800/60">
+          <tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <th class="px-4 py-2.5 font-semibold">File</th>
+            <th class="px-4 py-2.5 font-semibold">Responsibility</th>
+            <th class="px-4 py-2.5 font-semibold">Key symbols</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800 align-top">
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">utils/dealercore-config.js</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Single file to edit per environment.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              DEALERCORE_CONFIG <span class="text-slate-400">:4</span><br />
+              isDealerCoreHostname <span class="text-slate-400">:31</span><br />
+              tokenKeyFor <span class="text-slate-400">:40</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">utils/dealercore-api.js</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Protocol layer. Every DealerCore call except the handshake.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              createPkce <span class="text-slate-400">:65</span><br />
+              buildAuthorizeUrl <span class="text-slate-400">:74</span><br />
+              probeAuthorize <span class="text-slate-400">:107</span><br />
+              explainProbe <span class="text-slate-400">:139</span><br />
+              diagnoseDealercore <span class="text-slate-400">:175</span><br />
+              connectViaSession <span class="text-slate-400">:236</span><br />
+              launchOAuthLogin <span class="text-slate-400">:295</span><br />
+              authed <span class="text-slate-400">:345</span><br />
+              clearDealerCoreSession <span class="text-slate-400">:389</span><br />
+              verifySession <span class="text-slate-400">:407</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/dealercore-bridge.content.js</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Runs on DealerCore pages. Owns the handshake and the vehicle listener.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              silentHandshake <span class="text-slate-400">:13</span><br />
+              ingestStockEvent <span class="text-slate-400">:64</span><br />
+              matches <span class="text-slate-400">:95</span><br />
+              auto-handshake <span class="text-slate-400">:105</span><br />
+              origin guard <span class="text-slate-400">:109</span><br />
+              DC_RUN_HANDSHAKE <span class="text-slate-400">:125</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/sidepanel/AuthModal.jsx</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Login UI and the handshake→OAuth decision chain.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              runOAuthFlow <span class="text-slate-400">:46</span><br />
+              handleLogin <span class="text-slate-400">:65</span><br />
+              handleTestFlowA <span class="text-slate-400">:108</span> <span class="text-amber-600 dark:text-amber-400">temp</span><br />
+              handleOpenInTab <span class="text-slate-400">:122</span><br />
+              handleDiagnose <span class="text-slate-400">:133</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/sidepanel/pages/Settings.jsx</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Connection state, session verification, sign-out button.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              verifySession call <span class="text-slate-400">:94</span><br />
+              onLogout <span class="text-slate-400">:302</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/sidepanel/Sidepanel.jsx</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Derives "connected" from real session state; orchestrates sign-out.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              connection derivation <span class="text-slate-400">:61</span><br />
+              storage listener <span class="text-slate-400">:101</span><br />
+              handleLogout <span class="text-slate-400">:184</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/background.js</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Message router. Deliberately knows nothing about OAuth.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              listener <span class="text-slate-400">:12</span><br />
+              NAVIGATE_TO_CREATE <span class="text-slate-400">:14</span><br />
+              TRIGGER_MARKETPLACE_SYNC <span class="text-slate-400">:21</span><br />
+              DEALERCORE_LOGOUT <span class="text-slate-400">:37</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">wxt.config.ts</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Manifest: permissions and host patterns.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">permissions <span class="text-slate-400">:11</span> · host_permissions <span class="text-slate-400">:12</span></td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">auth-guide.md</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Upstream DealerCore spec. <strong class="text-amber-600 dark:text-amber-400">Known inaccurate</strong> on PKCE and scope.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">Flow A <span class="text-slate-400">:145</span> · Flow B <span class="text-slate-400">:190</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-4 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <p class="text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        <strong>Reading order for a newcomer:</strong> <code class="font-mono text-[12px]">dealercore-config.js</code> →
+        <code class="font-mono text-[12px]">AuthModal.jsx</code> to see the user journey →
+        <code class="font-mono text-[12px]">dealercore-bridge.content.js</code> for Flow B →
+        <code class="font-mono text-[12px]">dealercore-api.js</code> for Flow A and the shared helpers.
+      </p>
     </div>
 
     <h3 id="storage" class="anchor">Storage keys</h3>
@@ -305,6 +433,7 @@
 
     <!-- ───── unified login ───── -->
     <h2 id="unified-login" class="anchor">The login button</h2>
+    <p class="fileref">entrypoints/sidepanel/<b>AuthModal.jsx</b> → <b>handleLogin()</b> :65 · <b>runOAuthFlow()</b> :46 · <b>handleTestFlowA()</b> :108</p>
     <p>
       The modal exposes <strong>one</strong> primary action. Choosing a strategy is the
       extension's job, not the user's. The chain lives in
@@ -356,6 +485,7 @@
 
     <!-- ───── flow B ───── -->
     <h2 id="flow-b" class="anchor">Flow B · Silent handshake</h2>
+    <p class="fileref">entrypoints/<b>dealercore-bridge.content.js</b> → <b>silentHandshake()</b> :13 · driven by utils/<b>dealercore-api.js</b> → <b>connectViaSession()</b> :236</p>
     <p class="text-[15px]">
       <span class="rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">Default path</span>
     </p>
@@ -422,6 +552,7 @@
 
     <!-- ───── flow A ───── -->
     <h2 id="flow-a" class="anchor">Flow A · Interactive OAuth</h2>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>createPkce()</b> :65 · <b>buildAuthorizeUrl()</b> :74 · <b>launchOAuthLogin()</b> :295 · surfaced by <b>explainProbe()</b> :139</p>
     <p class="text-[15px]">
       <span class="rounded-md bg-slate-200 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-700 dark:bg-slate-700 dark:text-slate-200">Fallback path</span>
     </p>
@@ -501,6 +632,7 @@
 
     <!-- ───── lifecycle ───── -->
     <h2 id="lifecycle" class="anchor">Token lifecycle</h2>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>authed()</b> :345 · <b>getAccessToken()</b> :35 · <b>verifySession()</b> :407</p>
     <p>Every authenticated call funnels through one wrapper, which is why a dead token can never leak into the UI as a stale success.</p>
 
     <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
@@ -529,6 +661,7 @@
     </p>
 
     <h2 id="signout" class="anchor">Sign out</h2>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>clearDealerCoreSession()</b> :389 · triggered from <b>Sidepanel.jsx</b> → <b>handleLogout()</b> :184 · routed by <b>background.js</b> :37</p>
     <p>Sign-out must work identically regardless of which flow authenticated the session, so it never inspects the UI's auth object.</p>
     <ol>
       <li>Remove <strong>every</strong> <code class="font-mono text-[13px]">token_*</code> key, not just the active origin — otherwise a stale dev token can silently reconnect after switching to prod.</li>
@@ -542,6 +675,7 @@
 
     <!-- ───── developer guide ───── -->
     <h2 id="setup" class="anchor">Developer guide</h2>
+    <p class="fileref">Edit <b>utils/dealercore-config.js</b> · declared in <b>wxt.config.ts</b> · verify with <b>AuthModal.jsx</b> → <b>handleDiagnose()</b> :133</p>
 
     <h3>Step 1 — Create the OAuth client in Nova</h3>
     <ol>
@@ -613,6 +747,7 @@ npx wxt</code></pre>
 
     <!-- ───── reference ───── -->
     <h2 id="config" class="anchor">Configuration reference</h2>
+    <p class="fileref">utils/<b>dealercore-config.js</b> :4 → <b>DEALERCORE_CONFIG</b></p>
     <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
       <table class="min-w-full text-left text-sm">
         <thead class="bg-slate-50 dark:bg-slate-800/60">
@@ -634,7 +769,7 @@ npx wxt</code></pre>
     </div>
 
     <h2 id="api" class="anchor">API surface</h2>
-    <p>Exported from <code class="font-mono text-[13px]">utils/dealercore-api.js</code>.</p>
+    <p class="fileref">Exported from utils/<b>dealercore-api.js</b></p>
     <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
       <table class="min-w-full text-left text-sm">
         <thead class="bg-slate-50 dark:bg-slate-800/60">
@@ -657,6 +792,7 @@ npx wxt</code></pre>
     </div>
 
     <h2 id="manifest" class="anchor">Manifest &amp; permissions</h2>
+    <p class="fileref"><b>wxt.config.ts</b> :11–18 · content-script matches in entrypoints/<b>dealercore-bridge.content.js</b> :95</p>
     <p>Four permissions are load-bearing. Each maps to a specific requirement.</p>
     <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
       <table class="min-w-full text-left text-sm">
@@ -683,6 +819,7 @@ npx wxt</code></pre>
 
     <!-- ───── troubleshooting ───── -->
     <h2 id="troubleshooting" class="anchor">Troubleshooting</h2>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>diagnoseDealercore()</b> :175 · <b>probeAuthorize()</b> :107 · <b>explainProbe()</b> :139</p>
     <p>Open the modal's <strong>Troubleshooting</strong> disclosure for a per-endpoint status report. Read it alongside the table below.</p>
 
     <div class="mt-4 space-y-3">
@@ -705,6 +842,7 @@ npx wxt</code></pre>
     </div>
 
     <h2 id="quirks" class="anchor">Server quirks</h2>
+    <p class="fileref">Observed against <b>dev.dealercore.com.au</b> · implemented in utils/<b>dealercore-api.js</b> → <b>buildAuthorizeUrl()</b> :74, <b>probeAuthorize()</b> :107 · contradicts <b>auth-guide.md</b> :151</p>
     <p>Hard-won knowledge about this deployment. Each item was verified empirically.</p>
 
     <div class="mt-4 space-y-3">
@@ -752,6 +890,7 @@ npx wxt</code></pre>
     </div>
 
     <h2 id="errors" class="anchor">Error decoder</h2>
+    <p class="fileref">Messages produced by <b>explainProbe()</b> :139, <b>launchOAuthLogin()</b> :295 and <b>authed()</b> :345</p>
     <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
       <table class="min-w-full text-left text-sm">
         <thead class="bg-slate-50 dark:bg-slate-800/60">
@@ -795,6 +934,7 @@ npx wxt</code></pre>
     <ul class="space-y-0.5">
       <li><a href="#overview" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Overview</a></li>
       <li><a href="#architecture" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Architecture</a></li>
+      <li><a href="#source-map" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Source map</a></li>
       <li><a href="#storage" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Storage &amp; keys</a></li>
       <li><a href="#flow-b" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Flow B · Silent handshake</a></li>
       <li><a href="#flow-a" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Flow A · Interactive OAuth</a></li>
