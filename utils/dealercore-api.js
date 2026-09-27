@@ -73,15 +73,17 @@ export function createPkce() {
 
 export function buildAuthorizeUrl(base, challenge) {
   const origin = normalizeBaseUrl(base);
-  const params = new URLSearchParams({
+  const params = {
     client_id: DEALERCORE_CONFIG.CLIENT_ID,
     redirect_uri: redirectUri(),
     response_type: 'code',
-    scope: '',
     code_challenge: challenge,
     code_challenge_method: 'S256',
-  });
-  return `${origin}/oauth/authorize?${params.toString()}`;
+  };
+  // Only send `scope` when configured — an empty `scope=` can trip strict
+  // server-side scope validation and mask the real error.
+  if (DEALERCORE_CONFIG.SCOPE) params.scope = DEALERCORE_CONFIG.SCOPE;
+  return `${origin}/oauth/authorize?${new URLSearchParams(params).toString()}`;
 }
 
 export async function openAuthInTab(base) {
@@ -111,11 +113,22 @@ export async function probeAuthorize(base, challenge) {
       credentials: 'omit',
       headers: { Accept: 'text/html,application/xhtml+xml' },
     });
+    // The server answers a bad client with JSON, not HTML — keep it so the
+    // UI can quote the real reason instead of guessing.
+    const raw = await res.text().catch(() => '');
+    let error = null;
+    try {
+      const parsed = JSON.parse(raw);
+      error = { error: parsed.error, description: parsed.error_description };
+    } catch {
+      /* non-JSON body (login page / HTML error) */
+    }
     return {
       ok: res.status < 400,
       status: res.status,
       location: res.headers.get('location'),
       contentType: res.headers.get('content-type'),
+      error,
       url,
     };
   } catch (e) {
@@ -124,14 +137,19 @@ export async function probeAuthorize(base, challenge) {
 }
 
 export function explainProbe(probe) {
+  const clientId = DEALERCORE_CONFIG.CLIENT_ID;
   if (probe.status === 0) {
     return `Could not reach ${probe.url} — check VPN/network. (${probe.error || 'no response'})`;
   }
   if (probe.status === 401 || probe.status === 403) {
+    const code = probe.error?.error ? ` Server said "${probe.error.error}": ${probe.error.description}.` : '';
     return (
-      `Server rejected the authorize request (HTTP ${probe.status}) — the client_id is unknown, ` +
-      `inactive, or not marked First Party. Create/verify it in Nova → Integrations → OAuth Clients, ` +
-      `and make sure the placeholder CLIENT_ID in utils/dealercore-config.js is replaced.`
+      `Server rejected the authorize request (HTTP ${probe.status}) for client_id ${clientId}.${code} ` +
+      `This is a server-side OAuth client registration problem, not a credential problem. ` +
+      `In Passport this exact response means the client row was not found OR "First Party" is still ` +
+      `unchecked. Verify in Nova → Integrations → OAuth Clients that this exact UUID is First Party, ` +
+      `active, has the Authorization Code grant, and lists the redirect URI ` +
+      `${redirectUri()} (note the trailing slash).`
     );
   }
   if (probe.status === 404) {
