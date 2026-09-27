@@ -8,7 +8,7 @@ export default defineConfig({
     action: {
       default_title: 'DealerCore',
     },
-    permissions: ['storage', 'activeTab'],
+    permissions: ['storage', 'activeTab', 'cookies', 'scripting'],
     host_permissions: ['https://www.facebook.com/*'],
   },
 });

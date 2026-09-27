@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FB Automator — Feed Tester</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { font-family: ui-sans-serif, system-ui, sans-serif; background: #f3f4f6; margin: 0; padding: 32px 16px; }
+      .card { max-width: 720px; margin: 0 auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; box-shadow: 0 8px 24px rgba(0,0,0,.06); }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      p.sub { color: #6b7280; font-size: 13px; margin: 0 0 16px; }
+      textarea { width: 100%; min-height: 320px; font-family: ui-monospace, monospace; font-size: 12px; border: 1px solid #d1d5db; border-radius: 8px; padding: 12px; resize: vertical; }
+      .row { display: flex; gap: 8px; margin-top: 12px; }
+      button { flex: 1; background: #00a2e8; color: #fff; border: 0; border-radius: 8px; padding: 12px; font-weight: 700; font-size: 14px; cursor: pointer; }
+      button:hover { background: #008bc9; }
+      button.secondary { flex: 0 0 auto; background: #eef2f7; color: #111827; padding: 12px 16px; }
+      #status { margin-top: 12px; font-size: 13px; padding: 10px 12px; border-radius: 8px; background: #f9fafb; border: 1px solid #e5e7eb; color: #374151; white-space: pre-wrap; }
+      #status.ok { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+      #status.err { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+      code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>FB Automator — Feed Tester</h1>
+      <p class="sub">
+        Paste a <code>JSON array</code> of vehicles below and click Send.
+        It is delivered to the extension via <code>window.postMessage</code> and appended to the static list.
+        Keep this page open with the extension loaded (<code>npm run dev</code>).
+      </p>
+      <textarea id="payload" spellcheck="false">[
+  {
+    "vehicleType": "Car/van",
+    "imageUrls": ["https://picsum.photos/800/600"],
+    "location": "Brisbane, Queensland, Australia",
+    "year": "2020",
+    "make": "Mazda",
+    "model": "CX-5",
+    "mileage": "40000",
+    "price": "28000",
+    "fuelType": "Petrol",
+    "transmission": "Automatic transmission",
+    "bodyStyle": "SUV",
+    "condition": "Good",
+    "exteriorColour": "Red",
+    "interiorColour": "Black",
+    "cleanTitle": true,
+    "description": "Well maintained, full service history."
+  }
+]</textarea>
+      <div class="row">
+        <button id="send">Send to extension via postMessage</button>
+        <button id="fill" class="secondary" type="button">Reset sample</button>
+      </div>
+      <div id="status">Idle — nothing sent yet.</div>
+    </div>
+
+    <script>
+      var SAMPLE = document.getElementById('payload').value;
+      var textarea = document.getElementById('payload');
+      var statusEl = document.getElementById('status');
+      var sendBtn = document.getElementById('send');
+
+      function setStatus(msg, kind) {
+        statusEl.textContent = msg;
+        statusEl.className = kind || '';
+        statusEl.id = 'status';
+      }
+
+      document.getElementById('fill').addEventListener('click', function () {
+        textarea.value = SAMPLE;
+        setStatus('Sample restored. Click Send to deliver it.');
+      });
+
+      // Ack from the extension's content-script bridge.
+      window.addEventListener('message', function (event) {
+        var d = event.data;
+        if (!d || d.source !== 'FB_AUTOMATOR_FEED') return;
+        if (d.type !== 'FB_AUTOMATOR_FEED_RESULT') return;
+        if (d.ok) {
+          setStatus('Extension appended +' + d.added + ' item(s). Total now: ' + d.total + '.', 'ok');
+        } else {
+          setStatus('Extension reported an error: ' + (d.error || 'unknown'), 'err');
+        }
+      });
+
+      sendBtn.addEventListener('click', function () {
+        var raw = textarea.value.trim();
+        if (!raw) {
+          setStatus('Textarea is empty — paste a JSON array first.', 'err');
+          return;
+        }
+        var parsed;
+        try {
+          parsed = JSON.parse(raw);
+        } catch (e) {
+          setStatus('Invalid JSON: ' + e.message, 'err');
+          return;
+        }
+        // Accept a single object too, then normalize to array for the bridge.
+        var items = Array.isArray(parsed) ? parsed : [parsed];
+        window.postMessage(
+          { source: 'FB_AUTOMATOR_FEED', type: 'FB_AUTOMATOR_ADD_VEHICLES', items: items },
+          '*'
+        );
+        setStatus('Sent ' + items.length + ' item(s) via postMessage — waiting for extension ack…');
+      });
+    </script>
+  </body>
+</html>

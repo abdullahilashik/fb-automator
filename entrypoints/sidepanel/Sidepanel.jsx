@@ -1,108 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { browser } from "wxt/browser";
-import { Bookmark, Car, Loader2, RefreshCw, Send, Settings } from "lucide-react";
 import toast from "react-hot-toast";
+import AuthModal from "./AuthModal";
+import Settings from "./pages/Settings";
+import Listing, { buildVehicles } from "./pages/Listing";
+import NotConnected from "./pages/NotConnected";
+import { DEFAULT_ITEMS } from "@/utils/default-items";
 
 const TARGET_URL = "https://www.facebook.com/marketplace/create/vehicle";
-
-const DEFAULT_ITEMS = [
-  {
-    id: 1,
-    vehicleType: "Car/van",
-    imageUrls: ["https://picsum.photos/800/600"],
-    location: "Sydney, New South Wales, Australia",
-    year: "2021",
-    make: "Ford",
-    model: "F-150",
-    mileage: "25000",
-    price: "45000",
-    fuelType: "Petrol",
-    transmission: "Automatic transmission",
-    bodyStyle: "Van",
-    condition: "Excellent",
-    exteriorColour: "Black",
-    interiorColour: "Black",
-    cleanTitle: true,
-    description: "Excellent condition, one owner, smoke-free.",
-  },
-  {
-    id: 2,
-    vehicleType: "Car/van",
-    imageUrls: ["https://picsum.photos/800/600"],
-    location: "Melbourne, Victoria, Australia",
-    year: "2022",
-    make: "Toyota",
-    model: "Camry",
-    mileage: "15000",
-    price: "35000",
-    fuelType: "Hybrid",
-    transmission: "Automatic transmission",
-    bodyStyle: "Van",
-    condition: "Like new",
-    exteriorColour: "White",
-    interiorColour: "Grey",
-    cleanTitle: true,
-    description: "Great car, fuel efficient, low mileage.",
-  },
-];
-
-const STATUS_STYLES = {
-  success: {
-    card: "border-green-200 bg-green-50",
-    footer: "text-green-700",
-    message: "Ad details filled",
-  },
-  error: {
-    card: "border-red-200 bg-red-50",
-    footer: "text-red-700",
-    message: "Required fields couldn't be filled",
-  },
-  processing: {
-    card: "border-blue-200 bg-blue-50",
-    footer: "text-blue-700",
-    message: "Processing:",
-  },
-  default: {
-    card: "border-gray-200 bg-white",
-    footer: "text-gray-400",
-    message: "",
-  },
-};
-
-const FALLBACK_IMAGE =
-  "data:image/svg+xml;charset=UTF-8," +
-  encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120"><rect width="200" height="120" fill="#f3f4f6"/><text x="50%" y="50%" fill="#9ca3af" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">No photo</text></svg>'
-  );
-
-function buildVehicles(items, results, currentIndex, running) {
-  return items.map((item, index) => {
-    const res = (results || []).find((r) => r.id === item.id);
-    let status = "default";
-    let progress = 0;
-
-    if (res) {
-      status = res.status === "Success" ? "success" : "error";
-      progress = res.status === "Success" ? 100 : 95;
-    } else if (running && index === currentIndex) {
-      status = "processing";
-      progress = 50;
-    }
-
-    return {
-      id: item.id,
-      name: `${item.year} ${item.make} ${item.model}`,
-      trim: item.vehicleType,
-      price: `$${Number(item.price || 0).toLocaleString()}`,
-      km: item.mileage,
-      transmission: item.transmission,
-      fuel: item.fuelType,
-      image: item.imageUrls?.[0],
-      status,
-      progress,
-    };
-  });
-}
 
 const Sidepanel = () => {
   const [items, setItems] = useState([]);
@@ -111,6 +16,14 @@ const Sidepanel = () => {
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [running, setRunning] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [auth, setAuth] = useState(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [view, setView] = useState("main");
+  const [theme, setTheme] = useState("system");
+  const [dark, setDark] = useState(false);
+  const avatarMenuRef = useRef(null);
+  const [isConnected, setIsConnected] = useState(false);
 
   const vehicles = useMemo(
     () => buildVehicles(items, results, currentIndex, running),
@@ -119,7 +32,7 @@ const Sidepanel = () => {
 
   const loadData = useCallback(async () => {
     try {
-      const data = await browser.storage.local.get(["items", "results", "currentIndex", "selectedIds"]);
+      const data = await browser.storage.local.get(["items", "results", "currentIndex", "selectedIds", "auth"]);
       const storedItems = Array.isArray(data.items) && data.items.length ? data.items : DEFAULT_ITEMS;
       const storedResults = Array.isArray(data.results) ? data.results : [];
       const storedIndex = data.currentIndex || 0;
@@ -131,6 +44,7 @@ const Sidepanel = () => {
       setResults(storedResults);
       setCurrentIndex(storedIndex);
       setSelectedIds(storedSelected);
+      if (data.auth) setAuth(data.auth);
       setRunning(
         !!data.items && !(storedResults.length && storedResults.length >= storedItems.length)
       );
@@ -142,6 +56,28 @@ const Sidepanel = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Live-update when items are appended externally (e.g. index.html postMessage feed).
+  useEffect(() => {
+    const listener = (changes, area) => {
+      if (area !== "local" || !changes.items) return;
+      const next = changes.items.newValue;
+      if (!Array.isArray(next)) return;
+      setItems(next);
+      setSelectedIds((prev) => {
+        if (prev.size === 0) return new Set(next.map((it) => it.id));
+        const ids = new Set(next.map((it) => it.id));
+        const kept = new Set([...prev].filter((id) => ids.has(id)));
+        // Auto-select newly arrived ids so they are included by default.
+        next.forEach((it) => {
+          if (!prev.has(it.id)) kept.add(it.id);
+        });
+        return kept;
+      });
+    };
+    browser.storage.onChanged.addListener(listener);
+    return () => browser.storage.onChanged.removeListener(listener);
+  }, []);
 
   useEffect(() => {
     if (!running) return;
@@ -171,6 +107,58 @@ const Sidepanel = () => {
   useEffect(() => {
     browser.storage.local.set({ selectedIds: Array.from(selectedIds) });
   }, [selectedIds]);
+
+  useEffect(() => {
+    browser.storage.local.set({ auth });
+  }, [auth]);
+
+  useEffect(() => {
+    (async () => {
+      const data = await browser.storage.local.get("appearance");
+      if (data.appearance?.theme) {
+        setTheme(data.appearance.theme);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const dark =
+        theme === "dark" || (theme === "system" && media.matches);
+      document.documentElement.classList.toggle("dark", dark);
+      setDark(dark);
+    };
+    apply();
+    browser.storage.local.set({ appearance: { theme } });
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [theme]);
+
+  const handleThemeChange = (value) => setTheme(value);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (avatarMenuRef.current && !avatarMenuRef.current.contains(e.target)) {
+        setAvatarMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const handleAuthSuccess = (authData) => {
+    setAuth(authData);
+    setAuthModalOpen(false);
+  };
+
+  const handleLogout = () => {
+    setAuth(null);
+    setAvatarMenuOpen(false);
+    toast.success("Signed out");
+  };
+
+  const avatarLabel = auth?.user?.name?.charAt(0)?.toUpperCase() || "?";
 
   const toggleCar = (id) => {
     setSelectedIds((prev) => {
@@ -241,174 +229,70 @@ const Sidepanel = () => {
     toast.success("Draft saved");
   };
 
-  return (
-    <div className="h-full w-full bg-gray-200 flex flex-col overflow-hidden">
-      <div className="h-full w-full bg-white flex flex-col overflow-hidden shadow-xl">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-sky-600 rounded-full flex items-center justify-center">
-              <Car className="w-3 h-3 text-white" />
-            </div>
-            <span className="text-base tracking-tight">
-              <span className="font-bold text-gray-800">Dealer</span>
-              <span className="font-medium text-gray-500">Core</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-3 text-gray-400">
-            <button className="hover:text-gray-600" onClick={() => loadData()}>
-              <RefreshCw className="w-4 h-4" />
-            </button>
-            <div className="w-[1px] h-4 bg-gray-200" />
-            <button className="hover:text-gray-600">
-              <Bookmark className="w-4 h-4" />
-            </button>
-            <button className="hover:text-gray-600">
-              <Settings className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-5">
-          {loading ? (
-            <div className="flex justify-center py-10 text-gray-400">
-              <Loader2 className="w-5 h-5 animate-spin" />
-            </div>
-          ) : (
-            <>
-              <h1 className="text-md font-bold text-gray-900 leading-tight">Select Vehicles</h1>
-              <p className="text-[11px] text-gray-500 mt-1 mb-6">
-                Choose the vehicles you want to advertise on Facebook.
-              </p>
-
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-[12px] text-gray-600">{vehicles.length} vehicles available</span>
-                <button
-                  onClick={toggleAll}
-                  className="text-[12px] font-semibold text-blue-500 hover:text-blue-600 transition-colors"
-                >
-                  Select all
-                </button>
-              </div>
-
-              <div className="space-y-3">
-                {vehicles.map((car) => {
-                  const style = STATUS_STYLES[car.status];
-                  const isSelected = selectedIds.has(car.id);
-                  return (
-                    <div
-                      key={car.id}
-                      onClick={() => toggleCar(car.id)}
-                      className={`relative border rounded-lg transition-all cursor-pointer group flex flex-col overflow-hidden ${style.card}`}
-                    >
-                      <div className="p-2 flex gap-3">
-                        <div className="flex items-start pt-1">
-                          <div
-                            className={`w-4 h-4 border rounded flex items-center justify-center transition-all ${
-                              isSelected ? "bg-sky-500 border-sky-500" : "bg-white border-gray-300"
-                            }`}
-                          >
-                            {isSelected && (
-                              <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                          </div>
-                        </div>
-
-                        <img
-                          src={car.image}
-                          onError={(e) => (e.currentTarget.src = FALLBACK_IMAGE)}
-                          className="w-24 h-16 object-cover rounded-md bg-gray-50"
-                          alt={car.name}
-                        />
-
-                        <div className="flex-1 min-w-0 relative">
-                          <div className="flex justify-between items-start">
-                            <h3 className="text-[12px] font-bold text-gray-900 truncate">{car.name}</h3>
-                            {car.status === "error" && (
-                              <button
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-red-400 hover:text-red-600 p-1 bg-white rounded-full shadow-sm"
-                              >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                              </button>
-                            )}
-                          </div>
-                          <p className="text-[10px] text-gray-500 mb-0">{car.trim}</p>
-                          <p className="text-[12px] font-bold text-sky-500">{car.price}</p>
-                          <p className="text-[10px] text-gray-400 mt-0">
-                            {car.km} km • {car.transmission} • {car.fuel}
-                          </p>
-                        </div>
-                      </div>
-
-                      {car.status !== "default" && (
-                        <div
-                          className={`relative px-3 py-2 flex justify-between items-center text-[11px] font-medium ${style.footer}`}
-                        >
-                          <div className="flex items-center gap-1.5">
-                            {car.status === "success" && (
-                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                              </svg>
-                            )}
-                            {car.status === "error" && (
-                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                              </svg>
-                            )}
-                            <span>{style.message}</span>
-                          </div>
-                          <span>{car.progress}%</span>
-                        </div>
-                      )}
-
-                      {car.status === "processing" && (
-                        <div
-                          className="absolute bottom-0 left-0 h-1 bg-sky-400 transition-all duration-500"
-                          style={{ width: `${car.progress}%` }}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="p-4 border-t border-gray-100 bg-white shrink-0">
-          <div className="flex justify-between items-center mb-3">
-            <p className="text-[12px] font-medium text-gray-700">
-              <span>{selectedCount}</span> vehicles selected
-            </p>
-            <button
-              onClick={clearSelection}
-              className="text-xs font-semibold text-red-400 hover:text-red-500 transition-colors"
-            >
-              Clear selection
-            </button>
-          </div>
-          <div className="space-y-2">
-            <button
-              onClick={startAutomation}
-              disabled={selectedCount === 0 || running}
-              className="text-sm w-full bg-[#00a2e8] hover:bg-[#008bc9] text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-40"
-            >
-              {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {running ? "Publishing..." : "Publish"}
-            </button>
-            <button
-              onClick={saveDraft}
-              className="text-sm w-full bg-white border border-gray-300 text-gray-700 font-semibold py-2 rounded-lg hover:bg-gray-50 transition-all"
-            >
-              Save as draft
-            </button>
-          </div>
-        </div>
+  if (!isConnected)
+    return (
+      <div className="h-full w-full bg-gray-200 dark:bg-gray-950 flex flex-col overflow-hidden">
+        <NotConnected
+          dark={dark}
+          auth={auth}
+          avatarLabel={avatarLabel}
+          avatarMenuOpen={avatarMenuOpen}
+          avatarMenuRef={avatarMenuRef}
+          onToggleAvatar={() => {
+            if (auth) setAvatarMenuOpen((v) => !v);
+            else setAuthModalOpen(true);
+          }}
+          onLogout={handleLogout}
+          onRefresh={loadData}
+          onOpenSettings={() => setView("settings")}
+          onConnectHandle={setIsConnected}
+        />
       </div>
+    )
+
+  return (
+    <div className="h-full w-full bg-gray-200 dark:bg-gray-950 flex flex-col overflow-hidden">
+      {view === "settings" ? (
+        <Settings
+          theme={theme}
+          onThemeChange={handleThemeChange}
+          auth={auth}
+          onOpenAuth={() => setAuthModalOpen(true)}
+          onBack={() => setView("main")}
+        />
+      ) : (
+        <Listing
+          dark={dark}
+          loading={loading}
+          vehicles={vehicles}
+          selectedIds={selectedIds}
+          selectedCount={selectedCount}
+          running={running}
+          auth={auth}
+          avatarLabel={avatarLabel}
+          avatarMenuOpen={avatarMenuOpen}
+          avatarMenuRef={avatarMenuRef}
+          onToggleAvatar={() => {
+            if (auth) setAvatarMenuOpen((v) => !v);
+            else setAuthModalOpen(true);
+          }}
+          onLogout={handleLogout}
+          onRefresh={loadData}
+          onOpenSettings={() => setView("settings")}
+          onToggleCar={toggleCar}
+          onToggleAll={toggleAll}
+          onClearSelection={clearSelection}
+          onStartAutomation={startAutomation}
+          onSaveDraft={saveDraft}
+        />
+      )}
+
+      <AuthModal
+        open={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onSuccess={handleAuthSuccess}
+        dark={dark}
+      />
     </div>
   );
 };
