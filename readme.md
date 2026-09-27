@@ -17,3 +17,8 @@ Server said "invalid_client": Client authentication failed. This is a server-sid
 In Passport this exact response means the client row was not found OR "First Party" is still unchecked. Verify in Nova → Integrations → OAuth Clients that this exact UUID is First Party, active, has the Authorization Code grant, and lists the redirect URI https://cdjgjhdgomipcfgjjaklpioeamejcacf.chromiumapp.org/ (note the trailing slash).
 
 ```
+
+
+### Save Draft Button implementation
+
+selector: ``` div[aria-label="Save Draft"] ```

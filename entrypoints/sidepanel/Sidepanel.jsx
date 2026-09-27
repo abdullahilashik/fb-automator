@@ -44,6 +44,13 @@ const Sidepanel = () => {
     [items, results, currentIndex, running]
   );
 
+  useEffect(() => {
+    handleConnect()
+      .then(res => {
+        console.log('Hanlde connect response');
+      });
+  }, []);
+
   const loadData = useCallback(async () => {
     try {
       const data = await browser.storage.local.get(["items", "results", "currentIndex", "selectedIds", "auth", "dealercore_session"]);
