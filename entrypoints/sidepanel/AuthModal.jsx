@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, ShieldCheck, X } from "lucide-react";
+import { Loader2, ShieldCheck, X, ExternalLink } from "lucide-react";
 import toast from "react-hot-toast";
 import { browser } from "wxt/browser";
 import { DEALERCORE_CONFIG } from "@/utils/dealercore-config";
@@ -41,6 +41,26 @@ const AuthModal = ({ open, onClose, onSuccess, dark }) => {
     toast.success(message);
   };
 
+  // Flow A only: first-party OAuth + PKCE. Used both as the fallback for
+  // handleLogin and directly by the temporary "test Flow A" button.
+  const runOAuthFlow = async () => {
+    const token = await launchOAuthLogin(base);
+    const me = await fetchMe(base, token);
+    const authData = {
+      token,
+      baseUrl: base,
+      user: me.user ?? null,
+      dealer: me.dealer ?? null,
+      branch: me.branch ?? null,
+      branches: me.branches ?? [],
+    };
+    // Persist session snapshot for UI; token itself lives under token_<base>.
+    await browser.storage.local.set({
+      dealercore_session: { ...authData, savedAt: Date.now() },
+    });
+    return authData;
+  };
+
   // Single entry point: silent handshake first (default), OAuth as fallback.
   const handleLogin = async () => {
     setError("");
@@ -75,23 +95,25 @@ const AuthModal = ({ open, onClose, onSuccess, dark }) => {
     // --- Flow A (fallback): first-party OAuth + PKCE ---
     setPhase("oauth");
     try {
-      const token = await launchOAuthLogin(base);
-      const me = await fetchMe(base, token);
-      const authData = {
-        token,
-        baseUrl: base,
-        user: me.user ?? null,
-        dealer: me.dealer ?? null,
-        branch: me.branch ?? null,
-        branches: me.branches ?? [],
-      };
-      // Persist session snapshot for UI; token itself lives under token_<base>.
-      await browser.storage.local.set({
-        dealercore_session: { ...authData, savedAt: Date.now() },
-      });
-      finish(authData, "Signed in with DealerCore");
+      finish(await runOAuthFlow(), "Signed in with DealerCore");
     } catch (e) {
       setError(e.message || "Login failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // TEMPORARY: exercises Flow A in isolation, skipping the handshake, so the
+  // OAuth path can be verified while the handshake keeps succeeding.
+  const handleTestFlowA = async () => {
+    setError("");
+    setDiag(null);
+    setBusy(true);
+    setPhase("oauth");
+    try {
+      finish(await runOAuthFlow(), "Flow A (OAuth) succeeded");
+    } catch (e) {
+      setError(e.message || "Flow A failed.");
     } finally {
       setBusy(false);
     }
@@ -196,6 +218,21 @@ const AuthModal = ({ open, onClose, onSuccess, dark }) => {
           <p className="mt-1.5 text-[10px] text-gray-400 text-center">
             Tries the silent handshake first, then falls back to OAuth.
           </p>
+
+          {/* TEMPORARY — remove once Flow A is verified against a
+              first-party client. Runs OAuth directly, no handshake. */}
+          <button
+            onClick={handleTestFlowA}
+            disabled={busy}
+            className="mt-3 w-full text-[11px] font-semibold text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 border border-amber-300 dark:border-amber-800 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-all disabled:opacity-60"
+          >
+            {busy && phase === "oauth" ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <ExternalLink className="w-3.5 h-3.5" />
+            )}
+            TEMP — Test Flow A (OAuth only, skips handshake)
+          </button>
 
           <button
             onClick={() => setShowTrouble((v) => !v)}

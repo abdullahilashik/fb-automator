@@ -142,12 +142,22 @@ export function explainProbe(probe) {
     return `Could not reach ${probe.url} — check VPN/network. (${probe.error || 'no response'})`;
   }
   if (probe.status === 401 || probe.status === 403) {
+    // Only blame client registration when the server actually returned the
+    // OAuth error envelope. A bare 401 (no `error` field) is usually Laravel
+    // rejecting the request on content negotiation: this endpoint answers
+    // 302 for any HTML-ish Accept but 401 for `Accept: application/json`.
+    if (!probe.error?.error) {
+      return (
+        `HTTP ${probe.status} with no OAuth error body. This is usually not a ` +
+        `client-registration problem: /oauth/authorize is a browser navigation ` +
+        `endpoint and returns 401 when requested with Accept: application/json. ` +
+        `Re-test by clicking "Test Flow A", which opens a real browser tab.`
+      );
+    }
     const code = probe.error?.error ? ` Server said "${probe.error.error}": ${probe.error.description}.` : '';
     return (
       `Server rejected the authorize request (HTTP ${probe.status}) for client_id ${clientId}.${code} ` +
-      `This is a server-side OAuth client registration problem, not a credential problem. ` +
-      `In Passport this exact response means the client row was not found OR "First Party" is still ` +
-      `unchecked. Verify in Nova → Integrations → OAuth Clients that this exact UUID is First Party, ` +
+      `Verify in Nova → Integrations → OAuth Clients that this exact UUID is First Party, ` +
       `active, has the Authorization Code grant, and lists the redirect URI ` +
       `${redirectUri()} (note the trailing slash).`
     );
