@@ -5,7 +5,8 @@ import AuthModal from "./AuthModal";
 import Settings from "./pages/Settings";
 import Listing, { buildVehicles } from "./pages/Listing";
 import NotConnected from "./pages/NotConnected";
-import { DEFAULT_ITEMS, mergeDealerCoreVehicles } from "@/utils/default-items";
+// import { DEFAULT_ITEMS, mergeDealerCoreVehicles } from "@/utils/default-items";
+import { mergeDealerCoreVehicles } from "@/utils/default-items";
 import {
   getAccessToken,
   fetchMe,
@@ -54,7 +55,7 @@ const Sidepanel = () => {
   const loadData = useCallback(async () => {
     try {
       const data = await browser.storage.local.get(["items", "results", "currentIndex", "selectedIds", "auth", "dealercore_session"]);
-      const storedItems = Array.isArray(data.items) && data.items.length ? data.items : DEFAULT_ITEMS;
+      const storedItems = []; // Array.isArray(data.items) && data.items.length ? data.items : DEFAULT_ITEMS;
       const storedResults = Array.isArray(data.results) ? data.results : [];
       const storedIndex = data.currentIndex || 0;
       const storedSelected = Array.isArray(data.selectedIds)
