@@ -49,7 +49,7 @@ export function getRedirectUri() {
 }
 
 export function assertClientConfigured() {
-  if (!DEALERCORE_CONFIG.CLIENT_ID || DEALERCORE_CONFIG.CLIENT_ID === 'YOUR_FIRST_PARTY_CLIENT_ID') {
+  if (!DEALERCORE_CONFIG.CLIENT_ID || DEALERCORE_CONFIG.CLIENT_ID === 'YOUR_FIRST_PARTY_CLIENT_ID_TEST') {
     throw new Error(
       'OAuth CLIENT_ID is not set. Open utils/dealercore-config.js and paste the First-Party client ID from Nova → Integrations → OAuth Clients.',
     );
@@ -96,11 +96,97 @@ export async function openAuthInTab(base) {
   return url;
 }
 
+/**
+ * Pre-flight the authorize URL so we can report the server's real answer.
+ * Chrome's launchWebAuthFlow collapses every failure (401, 404, blocked
+ * navigation) into "Authorization page could not be loaded.", which hides
+ * the cause. Probing first gives an actionable message.
+ */
+export async function probeAuthorize(base, challenge) {
+  const url = buildAuthorizeUrl(base, challenge);
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      redirect: 'manual',
+      credentials: 'omit',
+      headers: { Accept: 'text/html,application/xhtml+xml' },
+    });
+    return {
+      ok: res.status < 400,
+      status: res.status,
+      location: res.headers.get('location'),
+      contentType: res.headers.get('content-type'),
+      url,
+    };
+  } catch (e) {
+    return { ok: false, status: 0, error: String(e?.message || e), url };
+  }
+}
+
+export function explainProbe(probe) {
+  if (probe.status === 0) {
+    return `Could not reach ${probe.url} — check VPN/network. (${probe.error || 'no response'})`;
+  }
+  if (probe.status === 401 || probe.status === 403) {
+    return (
+      `Server rejected the authorize request (HTTP ${probe.status}) — the client_id is unknown, ` +
+      `inactive, or not marked First Party. Create/verify it in Nova → Integrations → OAuth Clients, ` +
+      `and make sure the placeholder CLIENT_ID in utils/dealercore-config.js is replaced.`
+    );
+  }
+  if (probe.status === 404) {
+    return `HTTP 404 — /oauth/authorize does not exist on this origin. Check whether DealerCore mounts OAuth under a different path.`;
+  }
+  if (probe.status >= 300 && probe.status < 400) {
+    return `Server redirected to ${probe.location} (expected /login for a guest session).`;
+  }
+  return `Authorize endpoint responded HTTP ${probe.status} — unexpected for a document request.`;
+}
+
+/** Probe the endpoints the extension depends on. */
+export async function diagnoseDealercore(base) {
+  const origin = normalizeBaseUrl(base);
+  const { challenge } = await createPkce();
+  const probe = await probeAuthorize(origin, challenge);
+  const results = [{ label: 'GET /oauth/authorize', status: probe.status, note: explainProbe(probe) }];
+
+  const checks = [
+    { label: 'GET /api/v1/auth/me', path: '/api/v1/auth/me' },
+    { label: 'POST /api/v1/auth/handshake', path: '/api/v1/auth/handshake', method: 'POST' },
+  ];
+  for (const check of checks) {
+    try {
+      const res = await fetch(`${origin}${check.path}`, {
+        method: check.method || 'GET',
+        redirect: 'manual',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: check.method === 'POST' ? JSON.stringify({ client_id: DEALERCORE_CONFIG.CLIENT_ID }) : undefined,
+      });
+      results.push({
+        label: check.label,
+        status: res.status,
+        note: res.status === 200 ? 'OK (session present)' : res.status === 401 ? '401 — no DealerCore session in this browser' : `HTTP ${res.status}`,
+      });
+    } catch (e) {
+      results.push({ label: check.label, status: 0, note: String(e?.message || e) });
+    }
+  }
+  return { origin, redirectUri: redirectUri(), results };
+}
+
 export async function launchOAuthLogin(base) {
   assertClientConfigured();
   const origin = normalizeBaseUrl(base);
   const { verifier, challenge } = await createPkce();
   const authUrl = buildAuthorizeUrl(origin, challenge);
+
+  const probe = await probeAuthorize(origin, challenge);
+  if (!probe.ok && probe.status >= 400) {
+    throw new Error(explainProbe(probe));
+  }
+  console.log('[dealercore] authorize URL:', authUrl);
+
   let redirected;
   try {
     redirected = await browser.identity.launchWebAuthFlow({
@@ -109,8 +195,8 @@ export async function launchOAuthLogin(base) {
     });
   } catch (e) {
     throw new Error(
-      `Authorization page could not be loaded (${origin}/oauth/authorize). ` +
-        `Check the domain is reachable, the OAuth client exists with redirect URI ${redirectUri()}, and CLIENT_ID matches. (Underlying: ${e?.message || e})`,
+      `Authorization page could not be loaded. Server pre-flight said: ${explainProbe(probe)} ` +
+        `URL: ${authUrl} (Underlying: ${e?.message || e})`,
     );
   }
   const code = new URL(redirected).searchParams.get('code');
