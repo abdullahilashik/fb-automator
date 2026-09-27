@@ -1,17 +1,15 @@
-import 'dotenv/config';
-
 // DealerCore integration config (auth-guide.md §3).
 // CLIENT_ID is the First-Party OAuth client created in Nova Admin.
 // Paste the real value here — everything else adapts dynamically.
 export const DEALERCORE_CONFIG = {
-  CLIENT_ID: process.env.CLIENT_ID || 'YOUR_FIRST_PARTY_CLIENT_ID',
+  CLIENT_ID: '9a5c8e32-2d14-41b9-8390-1c5c0a377755',
   // Origin only — never append paths like /nova. All API/OAuth paths are
   // appended by dealercore-api.js. Nova (/nova/login) is the admin panel and
   // is NOT part of the runtime OAuth flow.
-  DEFAULT_DOMAIN: process.env.DEFAULT_DOMAIN || 'https://dev.dealercore.com.au',
-  PROD_DOMAIN: process.env.PROD_DOMAIN || 'https://dealercore.com.au',
+  DEFAULT_DOMAIN: 'https://dev.dealercore.com.au',
+  PROD_DOMAIN: 'https://dealercore.com.au',
   // chrome.identity redirect — extension id is filled in at runtime.
-  REDIRECT_PATH: process.env.REDIRECT_PATH || '/',
+  REDIRECT_PATH: '/',
 };
 
 export const DEALERCORE_HOSTS = {
