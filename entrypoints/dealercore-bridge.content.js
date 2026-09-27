@@ -5,7 +5,7 @@ import {
   isDealerCoreHostname,
   tokenKeyFor,
 } from '@/utils/dealercore-config';
-import { fromDealerCoreVehicle, appendVehicles } from '@/utils/default-items';
+import { mergeDealerCoreVehicles } from '@/utils/default-items';
 
 export const DC_MESSAGE_SOURCE = 'DEALERCORE_FB_EXTENSION';
 export const DC_MESSAGE_TYPE = 'STOCK_FOR_ADVERTISING';
@@ -30,6 +30,12 @@ async function silentHandshake(baseUrl, { force = false } = {}) {
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(payload),
     });
+    if (res.status === 429) {
+      // Throttled at 30/min (guide §8). The bridge auto-handshakes on every
+      // page load, so this is easy to trip; report it instead of pretending
+      // the user is simply signed out.
+      return { ok: false, rateLimited: true };
+    }
     if (res.status === 401) {
       await browser.storage.local.remove([tokenKeyFor(baseUrl)]);
       return { ok: false, unauthenticated: true };
@@ -62,33 +68,23 @@ async function silentHandshake(baseUrl, { force = false } = {}) {
 }
 
 async function ingestStockEvent(vehicle) {
-  const mapped = fromDealerCoreVehicle(vehicle);
-  if (!mapped) return { ok: false, error: 'Unusable vehicle payload.' };
+  if (!vehicle || typeof vehicle !== 'object') {
+    return { ok: false, error: 'Unusable vehicle payload.' };
+  }
   const stored = await browser.storage.local.get(['items']);
   const base = Array.isArray(stored.items) ? stored.items : [];
-  // Upsert by DealerCore id so re-sent "update" events don't duplicate.
-  const idx = base.findIndex(
-    (it) => it.dealerCoreId === mapped.dealerCoreId && mapped.dealerCoreId != null,
-  );
-  let merged;
-  if (idx >= 0) {
-    // UPDATE_POLICY: 're-publish' (default) — replace stored copy so the next
-    // automation run publishes the fresh details. To SKIP already-synced
-    // vehicles instead, change this block to keep the old entry, e.g.:
-    //   merged = base; // skip — keep existing, ignore incoming update
-    // and optionally surface a "skipped" count in the UI.
-    merged = [...base];
-    merged[idx] = { ...merged[idx], ...mapped, id: merged[idx].id };
-  } else {
-    merged = appendVehicles(base, [mapped]);
-  }
+  // Upsert-by-dealerCoreId, shared with the sidepanel's §5 API sync so a vehicle
+  // arriving through both channels cannot duplicate or drift apart.
+  const { items: merged, mapped } = mergeDealerCoreVehicles(base, [vehicle]);
   await browser.storage.local.set({ items: merged });
-  try {
-    await browser.runtime.sendMessage({ action: 'TRIGGER_MARKETPLACE_SYNC', vehicle: mapped });
-  } catch {
-    // Background may not be listening (e.g. sidepanel closed) — storage is source of truth.
+  if (mapped.length) {
+    try {
+      await browser.runtime.sendMessage({ action: 'TRIGGER_MARKETPLACE_SYNC', vehicle: mapped[0] });
+    } catch {
+      // Background may not be listening (e.g. sidepanel closed) — storage is source of truth.
+    }
   }
-  return { ok: true, total: merged.length, updated: idx >= 0 };
+  return { ok: true, total: merged.length };
 }
 
 export default defineContentScript({

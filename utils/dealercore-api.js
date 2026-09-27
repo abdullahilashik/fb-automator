@@ -3,6 +3,7 @@ import {
   DEALERCORE_CONFIG,
   isDealerCoreHostname,
   tokenKeyFor,
+  refreshKeyFor,
 } from '@/utils/dealercore-config';
 
 export function normalizeBaseUrl(raw) {
@@ -206,6 +207,30 @@ export async function diagnoseDealercore(base) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * fetch() that honours the 429 contract from auth-guide.md §8, retrying
+ * internally and honouring `Retry-After`.
+ *
+ * This matters more than it looks: the handshake is throttled to 30 req/min
+ * and auto-connect fires on *every* sidepanel open, so a user working quickly
+ * through the panel could throttle themselves into a silent failure.
+ *
+ * `onWait` is called with the delay in ms so callers can surface it instead of
+ * appearing to hang. A 429 that survives all retries is returned to the caller
+ * rather than thrown, so it can be reported as a distinct outcome.
+ */
+async function fetchWithRateLimitRetry(url, options = {}, retries = 3, onWait) {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, options);
+    if (res.status !== 429 || attempt >= retries) return res;
+    // Cap the wait so a hostile or misconfigured header can't hang the panel.
+    const retryAfter = parseInt(res.headers.get('Retry-After') || '5', 10) || 5;
+    const waitMs = Math.min(retryAfter, 60) * 1000;
+    onWait?.(waitMs);
+    await sleep(waitMs);
+  }
+}
+
+/**
  * Find an open DealerCore tab for this origin.
  *
  * The automatic path must never hijack the user's window, so both
@@ -311,6 +336,10 @@ export async function connectViaSession({ openTabIfMissing = true, focus = true 
           await sleep(150); // let the message listener register
           continue;
         }
+        // Injection was refused (restricted page, missing host permission), so
+        // no receiver will ever appear on this tab. Allow a still-loading tab
+        // one more chance, then stop burning the user's time on the spinner.
+        if (attempt >= 1) break;
       }
     }
     if (result?.ok) break;
@@ -349,6 +378,63 @@ export async function connectViaSession({ openTabIfMissing = true, focus = true 
  *
  * A still-valid token short-circuits the handshake entirely.
  */
+/**
+ * Flow B with no tab at all: run the handshake straight from the extension.
+ *
+ * The original content-script bridge existed because a cross-site POST from an
+ * extension page would be dropped by SameSite. That is no longer the binding
+ * constraint — DealerCore answers credentialed cross-origin requests from the
+ * extension origin (it echoes the origin with `Access-Control-Allow-Credentials:
+ * true` on both `/api/v1/auth/handshake` and `/api/v1/auth/me`), so Chrome
+ * attaches the existing session cookie and the exchange completes with no page
+ * to borrow, no content script to inject and no message round-trip.
+ *
+ * This is what lets the sidepanel connect on open even when the user has no
+ * DealerCore tab anywhere.
+ */
+async function handshakeFromExtension(base) {
+  const origin = normalizeBaseUrl(base);
+  const payload = DEALERCORE_CONFIG.HANDSHAKE_SEND_CLIENT_ID
+    ? { client_id: DEALERCORE_CONFIG.CLIENT_ID }
+    : {};
+  const res = await fetchWithRateLimitRetry(
+    `${origin}/api/v1/auth/handshake`,
+    {
+      method: 'POST',
+      // Required, or Chrome strips the session cookie and we get a bare 401.
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+    },
+    2,
+  );
+  if (res.status === 429) {
+    const err = new Error(
+      'DealerCore is rate limiting sign-in attempts. Wait a moment and reopen the panel.',
+    );
+    err.rateLimited = true;
+    throw err;
+  }
+  if (res.status === 401) {
+    await browser.storage.local.remove([tokenKeyFor(origin)]);
+    const err = new Error(
+      `DealerCore reported no active web session. Sign in to ${origin} (the main app, not /nova), then reconnect.`,
+    );
+    err.unauthenticated = true;
+    throw err;
+  }
+  if (!res.ok) throw new Error(`Handshake failed (${res.status}).`);
+  const data = await res.json();
+  const token = data?.token || data?.access_token;
+  if (!data?.status || !token) throw new Error('Handshake returned no token.');
+  await browser.storage.local.set({
+    dealercore_base_url: origin,
+    dealercore_signed_out: false,
+    [tokenKeyFor(origin)]: token,
+  });
+  return finalizeSession(origin);
+}
+
 export async function tryAutoConnect() {
   try {
     const { dealercore_signed_out: signedOut } = await browser.storage.local.get([
@@ -367,18 +453,55 @@ export async function tryAutoConnect() {
         // it, so dealer/branch would stay blank in the header and Settings.
         await persistSessionSnapshot(base, me);
         return { ok: true, base, me, via: 'existing-token' };
-      } catch {
+      } catch (e) {
+        // A 429 here means we are throttled, so re-handshaking immediately
+        // would burn more of the same budget. Surface it instead.
+        if (e?.rateLimited) {
+          return { ok: false, reason: e.message, rateLimited: true };
+        }
         // Token is dead; fall through and mint a fresh one.
       }
     }
 
-    const { base: usedBase, me } = await connectViaSession({
-      openTabIfMissing: false,
-      focus: false,
-    });
-    return { ok: true, base: usedBase, me, via: 'handshake' };
+    // Preferred: ask the server directly. No tab is borrowed, no content
+    // script is injected, no message round-trip — so the common case never
+    // touches the user's window at all.
+    try {
+      const { me } = await handshakeFromExtension(base);
+      return { ok: true, base, me, via: 'direct' };
+    } catch (directError) {
+      // Fall back to driving an already-open DealerCore tab. That path is
+      // same-origin, so it still works if CORS was tightened server-side.
+      // Skip it when throttled: the tab path hits the same endpoint, so a
+      // second attempt would only deepen the throttle.
+      if (!directError?.rateLimited) {
+        try {
+          const { base: usedBase, me } = await connectViaSession({
+            openTabIfMissing: false,
+            focus: false,
+          });
+          return { ok: true, base: usedBase, me, via: 'handshake' };
+        } catch {
+          /* fall through to the direct error, which is the actionable one */
+        }
+      }
+      // Report the direct error: it distinguishes "signed out" from
+      // "throttled" from "handshake broke", which the UI needs to say
+      // something useful instead of just "couldn't connect".
+      return {
+        ok: false,
+        reason: directError?.message || String(directError),
+        rateLimited: !!directError?.rateLimited,
+        unauthenticated: !!directError?.unauthenticated,
+      };
+    }
   } catch (e) {
-    return { ok: false, reason: e?.message || String(e) };
+    return {
+      ok: false,
+      reason: e?.message || String(e),
+      rateLimited: !!e?.rateLimited,
+      unauthenticated: !!e?.unauthenticated,
+    };
   }
 }
 
@@ -453,25 +576,115 @@ export async function launchOAuthLogin(base) {
     dealercore_base_url: origin,
     dealercore_signed_out: false,
     [tokenKeyFor(origin)]: token,
+    // Guide §3: Passport returns a refresh token alongside the access token and
+    // ROTATES it on every use, so the newest value must always be persisted or
+    // the next refresh fails. Previously this was discarded, leaving Flow B
+    // tokens with no renewal path at all.
+    [refreshKeyFor(origin)]: data.refresh_token || null,
     dealercore_session: { ...(data.user ? { user: data.user } : {}), savedAt: Date.now() },
   });
   return token;
 }
 
+/**
+ * Guide §3 step 5: exchange a stored refresh token for a fresh pair.
+ *
+ * Only applies to tokens minted by Flow B (OAuth). Handshake tokens have no
+ * refresh token and are renewed by simply repeating the handshake, so callers
+ * should fall back to that instead (guide §334).
+ */
+export async function refreshViaRefreshToken(base) {
+  const origin = normalizeBaseUrl(base);
+  const { refresh_token: refreshToken } = await browser.storage.local.get([
+    refreshKeyFor(origin),
+  ]);
+  if (!refreshToken) {
+    const err = new Error('No refresh token stored for this environment.');
+    err.noRefreshToken = true;
+    throw err;
+  }
+  const res = await fetchWithRateLimitRetry(
+    `${origin}/oauth/token`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        client_id: DEALERCORE_CONFIG.CLIENT_ID,
+      }),
+    },
+    2,
+  );
+  if (res.status === 429) {
+    const err = new Error('DealerCore is rate limiting token refresh. Try again shortly.');
+    err.rateLimited = true;
+    throw err;
+  }
+  if (!res.ok) {
+    // The old refresh token is spent and cannot be retried.
+    await browser.storage.local.remove([refreshKeyFor(origin)]);
+    throw new Error(`Token refresh failed (${res.status}). Please log in again.`);
+  }
+  const data = await res.json();
+  const token = data.access_token;
+  if (!token) throw new Error('Refresh response contained no access token.');
+  await browser.storage.local.set({
+    [tokenKeyFor(origin)]: token,
+    // Rotation: always overwrite with whatever came back, even if absent,
+    // rather than leaving a spent token behind.
+    [refreshKeyFor(origin)]: data.refresh_token || null,
+  });
+  return token;
+}
+
 async function authed(base, token, path, options = {}) {
-  const res = await fetch(`${base}${path}`, {
+  const url = `${base}${path}`;
+  const send = (bearer) => ({
     ...options,
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${bearer}`,
       ...(options.headers || {}),
     },
   });
+
+  let res = await fetchWithRateLimitRetry(url, send(token), 3);
+
+  // Guide §336 fallback chain: on 401 try a silent token renewal once before
+  // giving up, so an expired OAuth token doesn't force the user to log in.
+  // A 401 that survives a refresh is genuinely signed out.
+  if (res.status === 401) {
+    try {
+      const refreshed = await refreshViaRefreshToken(base);
+      res = await fetchWithRateLimitRetry(url, send(refreshed), 3);
+    } catch {
+      /* no usable refresh token — treat as signed out below */
+    }
+  }
+
+  if (res.status === 429) {
+    const err = new Error(
+      'DealerCore is rate limiting this extension. Wait a moment and try again.',
+    );
+    err.rateLimited = true;
+    throw err;
+  }
   if (res.status === 401) {
     // Token invalid — drop it so UI falls back to Login.
     await browser.storage.local.remove([tokenKeyFor(base)]);
-    throw new Error('Unauthenticated (401). Please log in again.');
+    const err = new Error('Unauthenticated (401). Please log in again.');
+    err.unauthenticated = true;
+    throw err;
+  }
+  if (res.status === 403) {
+    // Guide §7.4: vehicle outside your assigned branches, or a suspended dealer.
+    const err = new Error(
+      'DealerCore refused this request (403). The vehicle may be outside your assigned branches, or the dealership is suspended.',
+    );
+    err.forbidden = true;
+    throw err;
   }
   if (!res.ok) throw new Error(`DealerCore request failed (${res.status}).`);
   return res.json();
@@ -492,6 +705,61 @@ export async function fetchVehicles({ status, branch_id, page = 1, per_page = 25
   return authed(base, token, `/api/v1/facebook-marketplace/vehicles?${params.toString()}`);
 }
 
+/**
+ * Page through the vehicles endpoint until `meta.total` is covered.
+ *
+ * The endpoint defaults to per_page=25 while a busy dealership can have far
+ * more pending (the guide's own example has total 45), so a single call would
+ * silently truncate the list. Capped because the protected APIs are limited to
+ * 120 req/min (guide §8) — an uncapped walk over a large inventory would
+ * throttle the user.
+ */
+const MAX_SYNC_PAGES = 10;
+const MAX_SYNC_VEHICLES = 250;
+
+export async function fetchAllVehicles({
+  status,
+  branch_id,
+  per_page = 25,
+  maxPages = MAX_SYNC_PAGES,
+  maxVehicles = MAX_SYNC_VEHICLES,
+} = {}) {
+  const { base, token } = await getAccessToken();
+  if (!token) throw new Error('Not connected. Log in with DealerCore first.');
+
+  const collected = [];
+  let meta = null;
+  let truncated = false;
+
+  for (let page = 1; page <= maxPages; page++) {
+    const body = await fetchVehicles({ status, branch_id, page, per_page });
+    const rows = Array.isArray(body?.data) ? body.data : [];
+    meta = body?.meta ?? meta;
+    collected.push(...rows);
+
+    if (collected.length >= (meta?.total ?? collected.length)) break;
+    if (rows.length < per_page) break;
+    if (collected.length >= maxVehicles) {
+      truncated = true;
+      break;
+    }
+  }
+
+  if (meta && collected.length < meta.total && !truncated) truncated = true;
+
+  return {
+    vehicles: collected.slice(0, maxVehicles),
+    meta: {
+      total: meta?.total ?? collected.length,
+      page: meta?.page ?? 1,
+      per_page: meta?.per_page ?? per_page,
+      pending_post_count: meta?.pending_post_count ?? null,
+      pending_update_count: meta?.pending_update_count ?? null,
+    },
+    truncated,
+  };
+}
+
 // status: 'created' | 'updated' | 'failed'
 export async function writeBackSync({ vehicle_id, status, account_id, post_id, post_url, message }) {
   const { base, token } = await getAccessToken();
@@ -504,9 +772,13 @@ export async function writeBackSync({ vehicle_id, status, account_id, post_id, p
 
 export async function clearDealerCoreSession() {
   // Remove tokens for EVERY known environment, not just the active one, so a
-  // stale token can't silently reconnect after switching domains.
+  // stale token can't silently reconnect after switching domains. Refresh
+  // tokens must go too — leaving one behind would let a signed-out panel
+  // silently re-authenticate on its next API call.
   const all = await browser.storage.local.get(null);
-  const keys = Object.keys(all).filter((k) => k.startsWith('token_'));
+  const keys = Object.keys(all).filter(
+    (k) => k.startsWith('token_') || k.startsWith('refresh_'),
+  );
   keys.push('dealercore_session', 'auth');
   await browser.storage.local.remove(keys);
   // Suppress the silent handshake until the user explicitly connects again,

@@ -5,7 +5,7 @@ import AuthModal from "./AuthModal";
 import Settings from "./pages/Settings";
 import Listing, { buildVehicles } from "./pages/Listing";
 import NotConnected from "./pages/NotConnected";
-import { DEFAULT_ITEMS } from "@/utils/default-items";
+import { DEFAULT_ITEMS, mergeDealerCoreVehicles } from "@/utils/default-items";
 import {
   getAccessToken,
   fetchMe,
@@ -13,9 +13,14 @@ import {
   tryAutoConnect,
   getDealerCoreBaseUrl,
   launchOAuthLogin,
+  fetchAllVehicles,
 } from "@/utils/dealercore-api";
 
 const TARGET_URL = "https://www.facebook.com/marketplace/create/vehicle";
+
+// A failing auto-connect can settle in single-digit milliseconds, so the
+// connecting state is held for at least this long to stay perceivable.
+const MIN_CONNECTING_MS = 450;
 
 const Sidepanel = () => {
   const [items, setItems] = useState([]);
@@ -116,11 +121,21 @@ const Sidepanel = () => {
     (async () => {
       setConnectStatus("connecting");
       setConnectMessage("Checking your active DealerCore session…");
+      const started = Date.now();
       const result = await tryAutoConnect();
       if (cancelled) return;
+      // A failing attempt can resolve in a few milliseconds, which is too fast
+      // to perceive — the spinner would flash and the panel would appear to
+      // jump straight to the button. Hold the connecting state long enough to
+      // actually read.
+      const elapsed = Date.now() - started;
+      if (elapsed < MIN_CONNECTING_MS) {
+        await new Promise((r) => setTimeout(r, MIN_CONNECTING_MS - elapsed));
+        if (cancelled) return;
+      }
       if (!result.ok) {
-        // Expected on a cold browser: no DealerCore tab, or signed out.
-        // Not an error — just offer the connect button.
+        // Expected on a cold browser: no DealerCore session. Not an error —
+        // offer the connect button instead.
         setConnectStatus("idle");
         return;
       }
@@ -131,6 +146,45 @@ const Sidepanel = () => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Pull the full pending list from DealerCore (§5) instead of only whatever
+  // the postMessage bridge happened to deliver while the panel was open.
+  // This is what the header's refresh button runs.
+  const [syncing, setSyncing] = useState(false);
+  const [syncMeta, setSyncMeta] = useState(null);
+
+  const syncFromDealerCore = useCallback(async () => {
+    setSyncing(true);
+    try {
+      const { vehicles, meta, truncated } = await fetchAllVehicles();
+      const stored = await browser.storage.local.get(["items"]);
+      const base = Array.isArray(stored.items) ? stored.items : [];
+      const { items, added, updated } = mergeDealerCoreVehicles(base, vehicles);
+      await browser.storage.local.set({ items });
+      setItems(items);
+      setSyncMeta(meta);
+      // Respect the user's existing choices; only fall back to select-all when
+      // nothing was selected, matching the initial-load default.
+      setSelectedIds((prev) => (prev.size ? prev : new Set(items.map((it) => it.id))));
+      const bits = [`${added} new`, `${updated} updated`];
+      if (truncated) bits.push("list truncated");
+      toast.success(`Synced from DealerCore — ${bits.join(", ")}`);
+    } catch (e) {
+      if (e?.rateLimited) toast.error(e.message);
+      else if (e?.unauthenticated) {
+        toast.error("DealerCore session expired. Reconnect to keep syncing.");
+      } else {
+        toast.error(e?.message || "Sync from DealerCore failed");
+      }
+    } finally {
+      setSyncing(false);
+    }
+  }, []);
+
+  const handleRefresh = useCallback(async () => {
+    await syncFromDealerCore();
+    await loadData();
+  }, [syncFromDealerCore, loadData]);
 
   // Live-update when items are appended externally (e.g. index.html postMessage feed).
   useEffect(() => {
@@ -435,7 +489,9 @@ const Sidepanel = () => {
             else setAuthModalOpen(true);
           }}
           onLogout={handleLogout}
-          onRefresh={loadData}
+          onRefresh={handleRefresh}
+          syncing={syncing}
+          syncMeta={syncMeta}
           onOpenSettings={() => setView("settings")}
           onToggleCar={toggleCar}
           onToggleAll={toggleAll}

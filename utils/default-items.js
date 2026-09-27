@@ -115,6 +115,58 @@ export function appendVehicles(existingItems, incomingRaw) {
 }
 
 /**
+ * Merge a batch of raw DealerCore API vehicles into the stored list.
+ *
+ * Upserts by `dealerCoreId` so the same vehicle arriving twice — once via the
+ * §4 postMessage bridge, once via a §5 API sync — cannot duplicate, and keeps
+ * the locally assigned `id` so selection and per-item result state stay
+ * aligned after a refresh.
+ *
+ * UPDATE_POLICY: 're-publish' — an existing entry is replaced with the fresh
+ * copy so the next automation run publishes current details. To skip
+ * already-synced vehicles instead, keep the existing entry and ignore the
+ * incoming one.
+ *
+ * Shared by the bridge and the sidepanel sync so the two can't drift.
+ */
+export function mergeDealerCoreVehicles(existingItems, incomingRaw) {
+  let merged = Array.isArray(existingItems) ? [...existingItems] : [];
+  const incoming = Array.isArray(incomingRaw) ? incomingRaw : [];
+  const mapped = [];
+  let added = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  for (const raw of incoming) {
+    const vehicle = fromDealerCoreVehicle(raw);
+    if (!vehicle) continue;
+    mapped.push(vehicle);
+
+    const idx =
+      vehicle.dealerCoreId != null
+        ? merged.findIndex((it) => it.dealerCoreId === vehicle.dealerCoreId)
+        : -1;
+
+    if (idx >= 0) {
+      merged[idx] = { ...merged[idx], ...vehicle, id: merged[idx].id };
+      updated += 1;
+      continue;
+    }
+
+    const next = appendVehicles(merged, [vehicle]);
+    if (next.length > merged.length) {
+      merged = next;
+      added += 1;
+    } else {
+      // appendVehicles dropped it as a blank row or signature duplicate.
+      skipped += 1;
+    }
+  }
+
+  return { items: merged, added, updated, skipped, mapped };
+}
+
+/**
  * Map a DealerCore Facebook-Marketplace API vehicle (auth-guide.md §5)
  * into the flat shape the FB automation form filler consumes.
  * Returns a normalized object WITHOUT a local id (callers assign via

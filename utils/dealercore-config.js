@@ -10,12 +10,12 @@ export const DEALERCORE_CONFIG = {
   PROD_DOMAIN: 'https://dealercore.com.au',
   // chrome.identity redirect — extension id is filled in at runtime.
   REDIRECT_PATH: '/',
-  // Silent handshake: sending client_id makes DealerCore verify the client is
-  // active AND marked First Party. That check fails until the client is
-  // flagged, so we omit client_id by default and rely on the session cookie
-  // (auth-guide §3 Flow B lists client_id as optional). Set true once the
-  // client is marked First Party if you want the extra validation.
-  HANDSHAKE_SEND_CLIENT_ID: false,
+  // Silent handshake: the guide (§3 Flow A) states client_id is "strictly
+  // required to ensure the requesting client is a valid First-Party
+  // application", so we send it. Worth knowing: the server checks the session
+  // cookie *before* the client, so a 401 here never means "bad client_id" —
+  // it means no active DealerCore session.
+  HANDSHAKE_SEND_CLIENT_ID: true,
   // OAuth scopes requested at /oauth/authorize. Left empty because the
   // guide specifies no scopes; a blank value omits the `scope` param
   // entirely rather than sending `scope=`, which some Passport setups
@@ -39,4 +39,12 @@ export function isDealerCoreHostname(hostname) {
 
 export function tokenKeyFor(baseUrl) {
   return `token_${baseUrl}`;
+}
+
+/**
+ * Storage key for the OAuth refresh token (guide §3). Kept per-origin like the
+ * access token so switching environments can't renew against the wrong client.
+ */
+export function refreshKeyFor(baseUrl) {
+  return `refresh_${baseUrl}`;
 }

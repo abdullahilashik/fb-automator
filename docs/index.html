@@ -305,16 +305,23 @@
               probeAuthorize <span class="text-slate-400">:107</span><br />
               explainProbe <span class="text-slate-400">:139</span><br />
               diagnoseDealercore <span class="text-slate-400">:175</span><br />
-              ensureDealerCoreTab <span class="text-slate-400">:215</span><br />
-              connectViaSession <span class="text-slate-400">:243</span><br />
-              tryAutoConnect <span class="text-slate-400">:304</span> <span class="text-emerald-600 dark:text-emerald-400">auto</span><br />
-              persistSessionSnapshot <span class="text-slate-400">:341</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
-              finalizeSession <span class="text-slate-400">:355</span><br />
-              launchOAuthLogin <span class="text-slate-400">:363</span><br />
-              persistSessionSnapshot <span class="text-slate-400">:341</span><br />
-              authed <span class="text-slate-400">:413</span><br />
-              clearDealerCoreSession <span class="text-slate-400">:457</span><br />
-              verifySession <span class="text-slate-400">:475</span>
+              fetchWithRateLimitRetry <span class="text-slate-400">:221</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              ensureDealerCoreTab <span class="text-slate-400">:240</span><br />
+              bridgeScriptFiles <span class="text-slate-400">:262</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              ensureBridgeInjected <span class="text-slate-400">:282</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              connectViaSession <span class="text-slate-400">:305</span> <span class="text-amber-600 dark:text-amber-400">fallback</span><br />
+              handshakeFromExtension <span class="text-slate-400">:395</span> <span class="text-emerald-600 dark:text-emerald-400">preferred</span><br />
+              tryAutoConnect <span class="text-slate-400">:438</span> <span class="text-emerald-600 dark:text-emerald-400">auto</span><br />
+              persistSessionSnapshot <span class="text-slate-400">:512</span><br />
+              finalizeSession <span class="text-slate-400">:526</span><br />
+              launchOAuthLogin <span class="text-slate-400">:534</span><br />
+              refreshViaRefreshToken <span class="text-slate-400">:596</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              authed <span class="text-slate-400">:641</span><br />
+              fetchVehicles <span class="text-slate-400">:697</span><br />
+              fetchAllVehicles <span class="text-slate-400">:720</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              writeBackSync <span class="text-slate-400">:764</span><br />
+              clearDealerCoreSession <span class="text-slate-400">:773</span><br />
+              verifySession <span class="text-slate-400">:795</span>
             </td>
           </tr>
           <tr>
@@ -322,7 +329,9 @@
             <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Runs on DealerCore pages. Owns the handshake and the vehicle listener.</td>
             <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
               silentHandshake <span class="text-slate-400">:13</span><br />
-              ingestStockEvent <span class="text-slate-400">:64</span><br />
+              ingestStockEvent <span class="text-slate-400">:70</span><br />
+              429 guard <span class="text-slate-400">:36</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              double-inject guard <span class="text-slate-400">:103</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
               matches <span class="text-slate-400">:95</span><br />
               auto-handshake <span class="text-slate-400">:105</span><br />
               origin guard <span class="text-slate-400">:109</span><br />
@@ -334,19 +343,21 @@
             <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Landing page. Renders one of three states from a single <code class="font-mono text-[11.5px]">status</code> prop.</td>
             <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
               NotConnected <span class="text-slate-400">:14</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
-              connecting state <span class="text-slate-400">:41</span><br />
-              error state <span class="text-slate-400">:67</span><br />
-              idle / connect offer <span class="text-slate-400">:89</span>
+              connecting state <span class="text-slate-400">:47</span><br />
+              error state <span class="text-slate-400">:80</span><br />
+              idle / connect offer <span class="text-slate-400">:105</span>
             </td>
           </tr>
           <tr>
             <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/sidepanel/Sidepanel.jsx</td>
             <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Owns the connection state machine and routes between landing page, listing and settings.</td>
             <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
-              connectStatus state <span class="text-slate-400">:94</span><br />
-              applySession <span class="text-slate-400">:99</span><br />
-              auto-connect effect <span class="text-slate-400">:111</span> <span class="text-emerald-600 dark:text-emerald-400">auto</span><br />
-              handleConnect <span class="text-slate-400">:239</span> <span class="text-emerald-600 dark:text-emerald-400">new</span>
+              connectStatus state <span class="text-slate-400">:98</span><br />
+              applySession <span class="text-slate-400">:104</span><br />
+              auto-connect effect <span class="text-slate-400">:116</span> <span class="text-emerald-600 dark:text-emerald-400">auto</span><br />
+              syncFromDealerCore <span class="text-slate-400">:156</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              handleRefresh <span class="text-slate-400">:184</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              handleConnect <span class="text-slate-400">:293</span>
             </td>
           </tr>
           <tr>
@@ -583,19 +594,89 @@
 
     <!-- ───── flow A ───── -->
     <h3 id="auto-connect" class="anchor">Auto-connect on open</h3>
-    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>tryAutoConnect()</b> :304 · <b>ensureDealerCoreTab()</b> :215 · entrypoints/sidepanel/<b>Sidepanel.jsx</b> :111</p>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>tryAutoConnect()</b> :402 · <b>handshakeFromExtension()</b> :370 · <b>connectViaSession()</b> :280 · <b>ensureBridgeInjected()</b> :257 — entrypoints/sidepanel/<b>Sidepanel.jsx</b> :111</p>
     <p>
       Opening the sidepanel attempts the handshake on its own. In the common case the user never
-      touches a login button — the panel is simply already connected.
+      touches a login button — the panel is simply already connected. There is no prerequisite tab
+      to open first, and nothing is ever shown on screen.
     </p>
 
-    <p>The implementation makes four deliberate refusals, because an automatic action that can interrupt someone is worse than one extra click:</p>
+    <p>Three strategies are tried in order, cheapest first:</p>
+    <ol>
+      <li>
+        <strong>Reuse the stored token.</strong> Revalidated against
+        <code class="font-mono text-[13px]">/api/v1/auth/me</code>, so a stale token can never read
+        as a live session. A dead one falls through. Reported as
+        <code class="font-mono text-[13px]">via: 'existing-token'</code>.
+      </li>
+      <li>
+        <strong>Ask the server directly.</strong> <code class="font-mono text-[13px]">handshakeFromExtension()</code>
+        posts to <code class="font-mono text-[13px]">/api/v1/auth/handshake</code> from the extension
+        page itself with <code class="font-mono text-[13px]">credentials: 'include'</code>. No tab is
+        borrowed, no content script is injected, no message round-trip. Reported as
+        <code class="font-mono text-[13px]">via: 'direct'</code>.
+      </li>
+      <li>
+        <strong>Borrow an open DealerCore tab.</strong> <code class="font-mono text-[13px]">connectViaSession()</code>
+        drives the content-script bridge, injecting it first if the tab predates the extension load.
+        Same-origin, so it still works if CORS is ever tightened server-side. Reported as
+        <code class="font-mono text-[13px]">via: 'handshake'</code>.
+      </li>
+    </ol>
+
+    <p>It still refuses two things, because an automatic action that can interrupt someone is worse than one extra click:</p>
     <ul>
-      <li><strong>It never opens a tab.</strong> <code class="font-mono text-[13px]">ensureDealerCoreTab()</code> is called with <code class="font-mono text-[13px]">createIfMissing: false</code>. With no open DealerCore tab it gives up quietly instead of hijacking the window.</li>
-      <li><strong>It never steals focus.</strong> The same call passes <code class="font-mono text-[13px]">focus: false</code>, so an already-open DealerCore tab is borrowed in the background rather than activated.</li>
-      <li><strong>It never falls back to OAuth.</strong> Auto-connect is handshake-only. A login popup with no user action behind it is intrusive, so failure simply leaves the Login button visible.</li>
+      <li><strong>It never falls back to OAuth.</strong> Auto-connect is handshake-only. A login window with no user action behind it is intrusive, so failure simply leaves the connect button visible.</li>
       <li><strong>It honours sign-out.</strong> If <code class="font-mono text-[13px]">dealercore_signed_out</code> is set, auto-connect returns immediately — signing out actually sticks.</li>
     </ul>
+
+    <div class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/30">
+      <p class="text-[13px] font-semibold text-emerald-900 dark:text-emerald-300">Why the direct call is allowed at all</p>
+      <p class="mt-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        The bridge content script originally existed because a cross-site POST from an extension page
+        would be dropped by SameSite rules. That is no longer the binding constraint. DealerCore
+        answers credentialed cross-origin requests from the extension origin — verified against the
+        running server, which echoes the origin with
+        <code class="font-mono text-[12px]">Access-Control-Allow-Credentials: true</code> on both
+        <code class="font-mono text-[12px]">/api/v1/auth/handshake</code> (preflight
+        <code class="font-mono text-[12px]">204</code>) and
+        <code class="font-mono text-[12px]">/api/v1/auth/me</code> (which allows the
+        <code class="font-mono text-[12px]">authorization</code> header). So Chrome attaches the
+        existing session cookie and the exchange completes with no page involved.
+      </p>
+      <p class="mt-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        <code class="font-mono text-[12px]">credentials: 'include'</code> is not optional here: omit
+        it and Chrome strips the session cookie, producing a bare
+        <code class="font-mono text-[12px]">401</code> that looks identical to being signed out.
+        Strategy 3 is kept as a safety net precisely because this depends on server configuration
+        rather than on the extension alone.
+      </p>
+    </div>
+
+    <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/30">
+      <p class="text-[13px] font-semibold text-amber-900 dark:text-amber-300">A bug that made this silently not work</p>
+      <p class="mt-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        Before the direct path existed, the only route was the content-script bridge — and the bridge
+        is <em>statically declared</em>, so Chrome only injects it into pages loaded
+        <strong>after</strong> the extension. Any DealerCore tab that was already open — the norm
+        right after a reload, an update, or a fresh
+        <code class="font-mono text-[12px]">chrome://extensions</code> load — had no listener, so
+        <code class="font-mono text-[12px]">sendMessage</code> threw and the handshake had nowhere to
+        run. The symptom was a four-second spinner followed by the connect button, with no error to
+        explain it. Auto-connect looked implemented but was not.
+      </p>
+      <p class="mt-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        <code class="font-mono text-[12px]">ensureBridgeInjected()</code> fixes the fallback path by
+        injecting the bundle on demand via <code class="font-mono text-[12px]">scripting.executeScript()</code>
+        on the first "no receiver" response, then retrying after 150&nbsp;ms — 151&nbsp;ms to connect
+        instead of four seconds and a failure. The script path is read
+        from the manifest rather than hardcoded, and the bridge guards itself with a
+        <code class="font-mono text-[12px]">window.__DC_BRIDGE_READY__</code> sentinel so injecting
+        into an already-wired tab cannot double-register its listeners. When injection is genuinely
+        refused — a restricted page, or a missing host permission — the loop gives up after one
+        retry instead of spinning.
+      </p>
+    </div>
 
     <p>
       A stored token short-circuits the handshake, but it is revalidated against
@@ -619,11 +700,22 @@
       } <span class="text-sky-300">catch</span> {} <span class="text-slate-500">// dead token → handshake below</span>
     }
 
-    <span class="text-sky-300">const</span> { base: usedBase, me } = <span class="text-sky-300">await</span> <span class="text-amber-300">connectViaSession</span>({
-      openTabIfMissing: <span class="text-amber-300">false</span>,   <span class="text-slate-500">// never opens a tab</span>
-      focus: <span class="text-amber-300">false</span>,             <span class="text-slate-500">// never steals focus</span>
-    });
-    <span class="text-sky-300">return</span> { ok: <span class="text-amber-300">true</span>, base: usedBase, me, via: <span class="text-emerald-300">'handshake'</span> };
+    <span class="text-slate-500">// Preferred: no tab, no content script, no message round-trip.</span>
+    <span class="text-sky-300">try</span> {
+      <span class="text-sky-300">const</span> { me } = <span class="text-sky-300">await</span> <span class="text-amber-300">handshakeFromExtension</span>(base);
+      <span class="text-sky-300">return</span> { ok: <span class="text-amber-300">true</span>, base, me, via: <span class="text-emerald-300">'direct'</span> };
+    } <span class="text-sky-300">catch</span> (directError) {
+      <span class="text-slate-500">// Same-origin fallback: borrow an open DealerCore tab.</span>
+      <span class="text-sky-300">try</span> {
+        <span class="text-sky-300">const</span> { base: usedBase, me } = <span class="text-sky-300">await</span> <span class="text-amber-300">connectViaSession</span>({
+          openTabIfMissing: <span class="text-amber-300">false</span>,
+          focus: <span class="text-amber-300">false</span>,
+        });
+        <span class="text-sky-300">return</span> { ok: <span class="text-amber-300">true</span>, base: usedBase, me, via: <span class="text-emerald-300">'handshake'</span> };
+      } <span class="text-sky-300">catch</span> {
+        <span class="text-sky-300">return</span> { ok: <span class="text-amber-300">false</span>, reason: directError?.message };
+      }
+    }
   } <span class="text-sky-300">catch</span> (e) {
     <span class="text-sky-300">return</span> { ok: <span class="text-amber-300">false</span>, reason: e?.message || <span class="text-amber-300">String</span>(e) };
   }
@@ -857,8 +949,10 @@ npx wxt</code></pre>
 
     <h3>Step 5 — Smoke-test the landing page</h3>
     <ol>
-      <li><strong>Silent path:</strong> sign in to the <em>main</em> DealerCore app, leave that tab open, then open the sidepanel. You should briefly see the spinner, then land straight on the listing view — no click, no popup.</li>
-      <li><strong>No DealerCore tab:</strong> close the DealerCore tab, clear the extension's storage, reopen the sidepanel. The spinner should settle on <em>Connect with DealerCore</em> — and crucially must <em>not</em> open a tab or show an error.</li>
+      <li><strong>Silent path, tab open:</strong> sign in to the <em>main</em> DealerCore app, leave that tab open, then open the sidepanel. You should briefly see the spinner, then land straight on the listing view — no click, no popup.</li>
+      <li><strong>Silent path, <em>no</em> tab open:</strong> close every DealerCore tab, then open the sidepanel. It should connect anyway via the direct handshake. This is the case that previously fell back to the button.</li>
+      <li><strong>Stale extension reload:</strong> with a DealerCore tab open, hit reload on <em>chrome://extensions</em>, then reopen the sidepanel. The bridge is injected on demand, so this must still connect without you refreshing that tab.</li>
+      <li><strong>Not signed in:</strong> sign out of DealerCore in the browser, clear the extension's storage, open the sidepanel. The spinner should settle on <em>Connect with DealerCore</em> — and must <em>not</em> show an error.</li>
       <li><strong>Flow A:</strong> press <em>Connect with DealerCore</em>. Expect the DealerCore sign-in page, then a successful token exchange.</li>
       <li><strong>Flow A failure:</strong> sign in with bad credentials. Expect a red <em>Couldn't connect</em> panel with the server's own message and a <em>Try again</em> button.</li>
       <li><strong>Reuse:</strong> close and reopen the panel. A stored token should be revalidated and reused, with dealer and branch still populated in the header and Settings.</li>
@@ -904,7 +998,8 @@ npx wxt</code></pre>
         <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">getDealerCoreBaseUrl()</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Active origin, from the current tab when possible.</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">getAccessToken(base?)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px]">{ base, token }</code> for that origin.</td></tr>
-          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">tryAutoConnect()</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px]">{ ok, base?, me?, via? | reason }</code> — silent, never throws. See <a href="#auto-connect" class="text-brand-600 underline dark:text-brand-400">auto-connect</a>.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">tryAutoConnect()</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px]">{ ok, base?, me?, via? | reason }</code> — silent, never throws. <code class="font-mono text-[12px]">via</code> is <code class="font-mono text-[12px]">'existing-token'</code>, <code class="font-mono text-[12px]">'direct'</code> or <code class="font-mono text-[12px]">'handshake'</code>. See <a href="#auto-connect" class="text-brand-600 underline dark:text-brand-400">auto-connect</a>.</td></tr>
+        <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">handshakeFromExtension(base)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">- - internal. Posts the handshake from the extension page with <code class="font-mono text-[12px]">credentials: 'include'</code>. Needs no open tab. Returns <code class="font-mono text-[12px]">{ base, me }</code>; throws with <code class="font-mono text-[12px]">err.unauthenticated</code> on a 401.</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">connectViaSession(opts?)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px]">{ base, me }</code>. Accepts <code class="font-mono text-[12px]">openTabIfMissing</code> and <code class="font-mono text-[12px]">focus</code>.</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">launchOAuthLogin(base)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Access token — Flow A. Opens the sign-in page, so it is only called from an explicit click.</td></tr>
         <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">persistSessionSnapshot(base, me)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Internal. Caches the render-only session snapshot and clears the sign-out latch. Called by both <code class="font-mono text-[12px]">finalizeSession()</code> and the token-revalidation branch of <code class="font-mono text-[12px]">tryAutoConnect()</code>.</td></tr>
