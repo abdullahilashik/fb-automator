@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, ShieldCheck, X, ExternalLink } from "lucide-react";
+import { Loader2, ShieldCheck, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { browser } from "wxt/browser";
 import { DEALERCORE_CONFIG } from "@/utils/dealercore-config";
@@ -67,6 +67,9 @@ const AuthModal = ({ open, onClose, onSuccess, dark }) => {
         "[dealercore] silent handshake failed, falling back to OAuth:",
         handshakeError,
       );
+      toast("No active DealerCore session — switching to OAuth…", {
+        icon: "ℹ️",
+      });
     }
 
     // --- Flow A (fallback): first-party OAuth + PKCE ---
@@ -174,53 +177,6 @@ const AuthModal = ({ open, onClose, onSuccess, dark }) => {
             </p>
           )}
 
-          {diag && (
-            <div className="mb-3 text-[10px] font-mono bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 space-y-1">
-              {diag.results.map((r) => (
-                <div key={r.label} className="flex gap-1.5">
-                  <span
-                    className={
-                      r.status >= 200 && r.status < 400
-                        ? "text-green-600"
-                        : "text-red-500"
-                    }
-                  >
-                    [{r.status}]
-                  </span>
-                  <span className="text-gray-600 dark:text-gray-300">
-                    {r.label}
-                  </span>
-                </div>
-              ))}
-              <div className="text-gray-500 dark:text-gray-400 break-all pt-1 border-t border-gray-200 dark:border-gray-700">
-                redirect: {diag.redirectUri}
-              </div>
-            </div>
-          )}
-
-          <button
-            onClick={handleConnectSession}
-            disabled={busy}
-            className="w-full text-sm bg-white dark:bg-gray-800 border border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-300 font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all hover:bg-sky-50 dark:hover:bg-gray-700 disabled:opacity-60"
-          >
-            {busy ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <ShieldCheck className="w-4 h-4" />
-            )}
-            Use my active DealerCore session
-          </button>
-          <p className="mt-1.5 mb-3 text-[10px] text-gray-400 text-center">
-            Fastest path — log into the DealerCore app (not Nova) in a tab; the
-            extension grabs a Bearer token via the silent handshake.
-          </p>
-
-          <div className="flex items-center gap-2 mb-3">
-            <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
-            <span className="text-[10px] text-gray-400">or use OAuth</span>
-            <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
-          </div>
-
           <button
             onClick={handleLogin}
             disabled={busy}
@@ -229,36 +185,77 @@ const AuthModal = ({ open, onClose, onSuccess, dark }) => {
             {busy ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <ExternalLink className="w-4 h-4" />
+              <ShieldCheck className="w-4 h-4" />
             )}
-            {busy ? "Waiting for DealerCore…" : "Login with DealerCore"}
+            {busy
+              ? phase === "handshake"
+                ? "Checking your DealerCore session…"
+                : "Opening DealerCore sign-in…"
+              : "Login with DealerCore"}
           </button>
-          <button
-            onClick={handleOpenInTab}
-            disabled={busy}
-            className="mt-2 w-full text-[11px] font-semibold text-sky-600 hover:text-sky-700 py-1 disabled:opacity-60"
-          >
-            Page won't load? Open auth page in a tab to see the server error
-          </button>
-          <button
-            onClick={handleDiagnose}
-            disabled={busy}
-            className="mt-1 w-full text-[11px] font-semibold text-gray-500 hover:text-gray-700 py-1 disabled:opacity-60"
-          >
-            Diagnose connection
-          </button>
-          <button
-            onClick={copyRedirect}
-            className="mt-1 w-full text-[10px] font-mono text-gray-400 hover:text-gray-600 py-1 break-all"
-            title="Copy redirect URI"
-          >
-            {getRedirectUri()}
-          </button>
-          <p className="mt-2 text-[10px] text-gray-400 text-center">
-            Register the URI above in Nova → Integrations → OAuth Clients.
-            Silent handshake runs automatically when you browse DealerCore — use
-            this button only if it reports unauthenticated.
+          <p className="mt-1.5 text-[10px] text-gray-400 text-center">
+            Tries the silent handshake first, then falls back to OAuth.
           </p>
+
+          <button
+            onClick={() => setShowTrouble((v) => !v)}
+            className="mt-3 w-full text-[11px] font-semibold text-gray-400 hover:text-gray-600 py-1"
+          >
+            {showTrouble ? "Hide troubleshooting" : "Troubleshooting"}
+          </button>
+
+          {showTrouble && (
+            <div className="mt-1">
+              {diag && (
+                <div className="mb-3 text-[10px] font-mono bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 space-y-1">
+                  {diag.results.map((r) => (
+                    <div key={r.label} className="flex gap-1.5">
+                      <span
+                        className={
+                          r.status >= 200 && r.status < 400
+                            ? "text-green-600"
+                            : "text-red-500"
+                        }
+                      >
+                        [{r.status}]
+                      </span>
+                      <span className="text-gray-600 dark:text-gray-300">
+                        {r.label}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="text-gray-500 dark:text-gray-400 break-all pt-1 border-t border-gray-200 dark:border-gray-700">
+                    redirect: {diag.redirectUri}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={handleDiagnose}
+                disabled={busy}
+                className="w-full text-[11px] font-semibold text-gray-500 hover:text-gray-700 py-1 disabled:opacity-60"
+              >
+                Diagnose connection
+              </button>
+              <button
+                onClick={handleOpenInTab}
+                disabled={busy}
+                className="w-full text-[11px] font-semibold text-sky-600 hover:text-sky-700 py-1 disabled:opacity-60"
+              >
+                Open OAuth auth page in a tab to see the server error
+              </button>
+              <button
+                onClick={copyRedirect}
+                className="w-full text-[10px] font-mono text-gray-400 hover:text-gray-600 py-1 break-all"
+                title="Copy redirect URI"
+              >
+                {getRedirectUri()}
+              </button>
+              <p className="text-[10px] text-gray-400 text-center">
+                Register the URI above in Nova → Integrations → OAuth Clients.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
