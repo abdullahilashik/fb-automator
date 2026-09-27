@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+} from "react";
 import { browser } from "wxt/browser";
 import toast from "react-hot-toast";
 import AuthModal from "./AuthModal";
@@ -16,6 +22,8 @@ import {
   launchOAuthLogin,
   fetchAllVehicles,
 } from "@/utils/dealercore-api";
+
+// Dexie imports
 
 const TARGET_URL = "https://www.facebook.com/marketplace/create/vehicle";
 
@@ -40,21 +48,29 @@ const Sidepanel = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
+  // const vehiclesDb = useLiveQuery(() => db.vehicles.orderBy('id').reverse().toArray()); // get the latest first
+
   const vehicles = useMemo(
     () => buildVehicles(items, results, currentIndex, running),
-    [items, results, currentIndex, running]
+    [items, results, currentIndex, running],
   );
 
   useEffect(() => {
-    handleConnect()
-      .then(res => {
-        console.log('Hanlde connect response');
-      });
+    handleConnect().then((res) => {
+      console.log("Hanlde connect response");
+    });
   }, []);
 
   const loadData = useCallback(async () => {
     try {
-      const data = await browser.storage.local.get(["items", "results", "currentIndex", "selectedIds", "auth", "dealercore_session"]);
+      const data = await browser.storage.local.get([
+        "items",
+        "results",
+        "currentIndex",
+        "selectedIds",
+        "auth",
+        "dealercore_session",
+      ]);
       const storedItems = []; // Array.isArray(data.items) && data.items.length ? data.items : DEFAULT_ITEMS;
       const storedResults = Array.isArray(data.results) ? data.results : [];
       const storedIndex = data.currentIndex || 0;
@@ -69,7 +85,8 @@ const Sidepanel = () => {
       if (data.auth) setAuth(data.auth);
       else if (data.dealercore_session?.user) setAuth(data.dealercore_session);
       setRunning(
-        !!data.items && !(storedResults.length && storedResults.length >= storedItems.length)
+        !!data.items &&
+          !(storedResults.length && storedResults.length >= storedItems.length),
       );
     } finally {
       setLoading(false);
@@ -164,7 +181,22 @@ const Sidepanel = () => {
   const syncFromDealerCore = useCallback(async () => {
     setSyncing(true);
     try {
-      const { vehicles, meta, truncated } = await fetchAllVehicles();
+      const vehicleData = await fetchAllVehicles();
+      const { vehicles, meta, truncated } = vehicleData;
+
+      // local database sync: start
+      if (Array.isArray(vehicles) && vehicles.length > 0) {
+        const response = await browser.runtime.sendMessage({
+          type: "SYNC_VEHICLES",
+          payload: vehicles, // Pass the array, not the parent object
+        });
+
+        if (response?.success) {
+          console.log(`Local sync successful: ${response.count} items saved.`);
+        }
+      }
+      // local database sync: ends
+
       const stored = await browser.storage.local.get(["items"]);
       const base = Array.isArray(stored.items) ? stored.items : [];
       const { items, added, updated } = mergeDealerCoreVehicles(base, vehicles);
@@ -173,7 +205,9 @@ const Sidepanel = () => {
       setSyncMeta(meta);
       // Respect the user's existing choices; only fall back to select-all when
       // nothing was selected, matching the initial-load default.
-      setSelectedIds((prev) => (prev.size ? prev : new Set(items.map((it) => it.id))));
+      setSelectedIds((prev) =>
+        prev.size ? prev : new Set(items.map((it) => it.id)),
+      );
       const bits = [`${added} new`, `${updated} updated`];
       if (truncated) bits.push("list truncated");
       toast.success(`Synced from DealerCore — ${bits.join(", ")}`);
@@ -219,7 +253,12 @@ const Sidepanel = () => {
   useEffect(() => {
     if (!running) return;
     const timer = setInterval(async () => {
-      const data = await browser.storage.local.get(["items", "results", "currentIndex", "automation_state"]);
+      const data = await browser.storage.local.get([
+        "items",
+        "results",
+        "currentIndex",
+        "automation_state",
+      ]);
       if (Array.isArray(data.items)) {
         setItems(data.items);
       }
@@ -239,7 +278,10 @@ const Sidepanel = () => {
       }
       // The queue is cleared on cancel/complete, so treat the phase as
       // authoritative for stopping the "running" state.
-      if (data.automation_state?.phase === "cancelled" || data.automation_state?.phase === "complete") {
+      if (
+        data.automation_state?.phase === "cancelled" ||
+        data.automation_state?.phase === "complete"
+      ) {
         setRunning(false);
       }
     }, 1500);
@@ -266,8 +308,7 @@ const Sidepanel = () => {
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => {
-      const dark =
-        theme === "dark" || (theme === "system" && media.matches);
+      const dark = theme === "dark" || (theme === "system" && media.matches);
       document.documentElement.classList.toggle("dark", dark);
       setDark(dark);
     };
@@ -337,7 +378,8 @@ const Sidepanel = () => {
 
   const toggleAll = () => {
     setSelectedIds((prev) => {
-      const allSelected = vehicles.length > 0 && vehicles.every((v) => prev.has(v.id));
+      const allSelected =
+        vehicles.length > 0 && vehicles.every((v) => prev.has(v.id));
       return allSelected ? new Set() : new Set(vehicles.map((v) => v.id));
     });
   };
@@ -369,13 +411,19 @@ const Sidepanel = () => {
     setRunning(true);
     setSelectedIds(itemIds);
 
-    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await browser.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
     if (!tab) {
       toast.error("No active tab found");
       return;
     }
 
-    if (tab.url && tab.url.startsWith("https://www.facebook.com/marketplace/create/")) {
+    if (
+      tab.url &&
+      tab.url.startsWith("https://www.facebook.com/marketplace/create/")
+    ) {
       browser.tabs.sendMessage(tab.id, { action: "START_AUTOMATION" }, () => {
         if (browser.runtime.lastError) {
           browser.tabs.update(tab.id, { url: TARGET_URL });
@@ -417,8 +465,14 @@ const Sidepanel = () => {
       });
 
       if (!cleared) {
-        await browser.storage.local.remove(["items", "currentIndex", "results"]);
-        toast("Automation stopped. The Facebook tab may still be finishing a publish.");
+        await browser.storage.local.remove([
+          "items",
+          "currentIndex",
+          "results",
+        ]);
+        toast(
+          "Automation stopped. The Facebook tab may still be finishing a publish.",
+        );
       } else {
         toast.success("Automation cancelled");
       }
@@ -440,7 +494,10 @@ const Sidepanel = () => {
       toast.error("Select at least one vehicle");
       return;
     }
-    await browser.storage.local.set({ draftItems: selectedItems, draftSavedAt: Date.now() });
+    await browser.storage.local.set({
+      draftItems: selectedItems,
+      draftSavedAt: Date.now(),
+    });
     toast.success("Draft saved");
   };
 
@@ -467,7 +524,7 @@ const Sidepanel = () => {
           onConnect={handleConnect}
         />
       </div>
-    )
+    );
 
   return (
     <div className="h-full w-full bg-gray-200 dark:bg-gray-950 flex flex-col overflow-hidden">

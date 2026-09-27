@@ -4,6 +4,11 @@ import { appendVehicles } from '@/utils/default-items';
 import { clearDealerCoreSession } from '@/utils/dealercore-api';
 import { fromDealerCoreVehicle } from '@/utils/default-items';
 
+
+// Dexie Operations
+import {db} from '@/utils/db';
+
+
 export default defineBackground(() => {
   if (browser.sidePanel) {
     browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => { });
@@ -39,6 +44,49 @@ export default defineBackground(() => {
         sendResponse({ status: 'logged-out' });
         return;
       }
+
+
+      //  single vehicles all at once
+      if(request.type == 'SYNC_VEHICLES') {
+        db.vehicles
+          .bulkPut(request.payload)
+          .then(
+            (lastResultKey) => {
+              sendResponse({
+                success: true,
+                count: request.payload.length,
+                lastKey: lastResultKey
+              })
+            }
+          )
+          .catch((error) => {
+            console.error(`Failed to sync vehicles to indexed db: ${error}`)
+            sendResponse({success: false, error: String(error)});
+          })
+      }
+
+      // save or update a single vehicle
+      if(request.type === 'SAVE_SINGLE_VEHICLE') {
+        db.vehicles
+          .put(request.payload)
+          .then((id) => {
+            sendResponse({ success: true, id});
+          })
+          .catch((error) => {
+            console.log(`Failed to SAVE_SINGLE_VEHICLE for: ${error}`);
+            sendResponse({success: false, error: String(error)});
+          })
+      }
+
+      // clear all vehicles from indexed db
+      if(request.type === 'CLEAR_VEHICLES') {
+        db.vehicles
+          .clear()
+          .then(() => sendResponse({success: true}))
+          .catch((error) => sendResponse({success: false}));
+      }      
+
+
       sendResponse({ status: 'ignored' });
     })();
     // keep the message line open for async sendResponse
