@@ -6,6 +6,7 @@ import Settings from "./pages/Settings";
 import Listing, { buildVehicles } from "./pages/Listing";
 import NotConnected from "./pages/NotConnected";
 import { DEFAULT_ITEMS } from "@/utils/default-items";
+import { getAccessToken, fetchMe, clearDealerCoreSession } from "@/utils/dealercore-api";
 
 const TARGET_URL = "https://www.facebook.com/marketplace/create/vehicle";
 
@@ -32,7 +33,7 @@ const Sidepanel = () => {
 
   const loadData = useCallback(async () => {
     try {
-      const data = await browser.storage.local.get(["items", "results", "currentIndex", "selectedIds", "auth"]);
+      const data = await browser.storage.local.get(["items", "results", "currentIndex", "selectedIds", "auth", "dealercore_session"]);
       const storedItems = Array.isArray(data.items) && data.items.length ? data.items : DEFAULT_ITEMS;
       const storedResults = Array.isArray(data.results) ? data.results : [];
       const storedIndex = data.currentIndex || 0;
@@ -45,6 +46,7 @@ const Sidepanel = () => {
       setCurrentIndex(storedIndex);
       setSelectedIds(storedSelected);
       if (data.auth) setAuth(data.auth);
+      else if (data.dealercore_session?.user) setAuth(data.dealercore_session);
       setRunning(
         !!data.items && !(storedResults.length && storedResults.length >= storedItems.length)
       );
@@ -55,6 +57,26 @@ const Sidepanel = () => {
 
   useEffect(() => {
     loadData();
+    // Derive connection from real DealerCore session (handshake or OAuth),
+    // not the local toggle. Validates the per-domain Bearer via /me.
+    (async () => {
+      try {
+        const { base, token } = await getAccessToken();
+        if (!token) return;
+        const me = await fetchMe(base, token);
+        setAuth({
+          token,
+          baseUrl: base,
+          user: me.user ?? null,
+          dealer: me.dealer ?? null,
+          branch: me.branch ?? null,
+          branches: me.branches ?? [],
+        });
+        setIsConnected(true);
+      } catch {
+        // No valid session — stay on NotConnected with Login button.
+      }
+    })();
   }, [loadData]);
 
   // Live-update when items are appended externally (e.g. index.html postMessage feed).
@@ -150,10 +172,15 @@ const Sidepanel = () => {
   const handleAuthSuccess = (authData) => {
     setAuth(authData);
     setAuthModalOpen(false);
+    setIsConnected(true);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await clearDealerCoreSession();
+    } catch {}
     setAuth(null);
+    setIsConnected(false);
     setAvatarMenuOpen(false);
     toast.success("Signed out");
   };

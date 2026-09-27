@@ -4,6 +4,7 @@ import { findLabelByText } from '@/utils/find-label-by';
 import { handleAutosuggestDropdown, handleCheckbox, handleDropdown, handlePhotos } from '@/utils/handle-form-field';
 import { typeLikeHuman } from '@/utils/input-simulation';
 import { sleep } from '@/utils/sleep';
+import { writeBackSync } from '@/utils/dealercore-api';
 
 const TARGET_URL = 'https://www.facebook.com/marketplace/create/vehicle';
 
@@ -90,6 +91,30 @@ async function generateCSV(results) {
     link.click();
 }
 
+function extractPostInfo() {
+    const href = window.location.href || '';
+    const itemMatch = href.match(/marketplace\/item\/(\d+)/);
+    const post_id = itemMatch ? itemMatch[1] : '';
+    return { post_id, post_url: post_id ? `https://www.facebook.com/marketplace/item/${post_id}/` : href };
+}
+
+// Best-effort write-back — never throws into the automation loop.
+async function reportSync(item, status, message) {
+    if (item?.dealerCoreId == null) return;
+    try {
+        await writeBackSync({
+            vehicle_id: item.dealerCoreId,
+            status,
+            account_id: '',
+            post_id: item._lastPostId || '',
+            post_url: item._lastPostUrl || '',
+            message: message || null,
+        });
+    } catch (err) {
+        console.warn(`[dealercore] write-back (${status}) failed for vehicle ${item.dealerCoreId}:`, err?.message || err);
+    }
+}
+
 async function runAutomation(itemsToProcess, startIndex, results) {
     let currentIndex = startIndex || 0;
     let currentResults = results || [];
@@ -119,6 +144,14 @@ async function runAutomation(itemsToProcess, startIndex, results) {
                     currentResults.push({ id: item.id, status: "Success" });
                     // Wait for redirect to finish before moving to next item
                     await sleep(8000);
+                    // UPDATE_POLICY: 're-publish' — every run (post or update)
+                    // reports as published. To SKIP updates instead, gate the
+                    // write-back + automation on item.dealerCoreStatus, e.g.:
+                    //   if (item.dealerCoreStatus === 'update') { ...skip... }
+                    const { post_id, post_url } = extractPostInfo();
+                    item._lastPostId = post_id;
+                    item._lastPostUrl = post_url;
+                    await reportSync(item, item.dealerCoreStatus === 'update' ? 'updated' : 'created');
                 } else {
                     throw new Error("Publish button not found/enabled");
                 }
@@ -128,6 +161,7 @@ async function runAutomation(itemsToProcess, startIndex, results) {
         } catch (error) {
             console.error(`Error processing item ${item.id}:`, error);
             currentResults.push({ id: item.id, status: "Failed" });
+            await reportSync(item, 'failed', error?.message || String(error));
         }
 
         // Save progress for the *next* iteration

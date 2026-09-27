@@ -8,7 +8,13 @@ export default defineConfig({
     action: {
       default_title: 'DealerCore',
     },
-    permissions: ['storage', 'activeTab', 'cookies', 'scripting'],
-    host_permissions: ['https://www.facebook.com/*'],
+    permissions: ['storage', 'activeTab', 'cookies', 'scripting', 'identity'],
+    host_permissions: [
+      'https://www.facebook.com/*',
+      'https://dealercore.com.au/*',
+      'https://*.dealercore.com.au/*',
+      'http://*.test/*',
+      'http://localhost/*',
+    ],
   },
 });

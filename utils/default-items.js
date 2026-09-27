@@ -113,3 +113,52 @@ export function appendVehicles(existingItems, incomingRaw) {
   }
   return [...existing, ...appended];
 }
+
+/**
+ * Map a DealerCore Facebook-Marketplace API vehicle (auth-guide.md §5)
+ * into the flat shape the FB automation form filler consumes.
+ * Returns a normalized object WITHOUT a local id (callers assign via
+ * normalizeVehicle/appendVehicles), but WITH dealerCoreId for upserts.
+ */
+export function fromDealerCoreVehicle(apiVehicle) {
+  if (!apiVehicle || typeof apiVehicle !== 'object') return null;
+  const details = apiVehicle.details || {};
+  const pricing = apiVehicle.pricing || {};
+  const images = Array.isArray(apiVehicle.images) ? apiVehicle.images.slice(0, 20) : [];
+
+  const year = details.year ?? '';
+  const mileage = details.mileage ?? details.odometer ?? '';
+  const price = pricing.price ?? pricing.advertised_price ?? '';
+  const bodyStyle = details.body_style ?? details.body_type ?? '';
+
+  // Guide has no dedicated location field — fall back to branch/state text
+  // when present, else empty (FB step will skip an empty location).
+  const branch = apiVehicle.branch || {};
+  const location =
+    apiVehicle.location ||
+    [branch.name, branch.state].filter(Boolean).join(', ') ||
+    '';
+
+  return {
+    ...VEHICLE_DEFAULTS,
+    dealerCoreId: apiVehicle.id ?? null,
+    dealerCoreStatus: apiVehicle.status ?? null, // 'post' | 'update'
+    dealerCoreFacebook: apiVehicle.facebook || null,
+    vehicleType: 'Car/van',
+    imageUrls: images.filter((u) => typeof u === 'string' && u.length > 0),
+    location: String(location),
+    year: String(year ?? ''),
+    make: String(details.make ?? ''),
+    model: String(details.model ?? ''),
+    mileage: String(mileage ?? ''),
+    price: String(price ?? ''),
+    fuelType: String(details.fuel_type ?? ''),
+    transmission: String(details.transmission ?? ''),
+    bodyStyle: String(bodyStyle ?? ''),
+    condition: String(details.condition ?? ''),
+    exteriorColour: String(details.colour ?? ''),
+    interiorColour: '',
+    cleanTitle: false,
+    description: String(apiVehicle.description ?? ''),
+  };
+}
