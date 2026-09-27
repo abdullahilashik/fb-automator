@@ -17,14 +17,18 @@ import {
 const AuthModal = ({ open, onClose, onSuccess, dark }) => {
   const [base, setBase] = useState(DEALERCORE_CONFIG.DEFAULT_DOMAIN);
   const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState("handshake");
   const [error, setError] = useState("");
   const [diag, setDiag] = useState(null);
+  const [showTrouble, setShowTrouble] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setError("");
     setBusy(false);
+    setPhase("handshake");
     setDiag(null);
+    setShowTrouble(false);
     getDealerCoreBaseUrl()
       .then(setBase)
       .catch(() => {});
@@ -32,9 +36,41 @@ const AuthModal = ({ open, onClose, onSuccess, dark }) => {
 
   if (!open) return null;
 
+  const finish = (authData, message) => {
+    onSuccess(authData);
+    toast.success(message);
+  };
+
+  // Single entry point: silent handshake first (default), OAuth as fallback.
   const handleLogin = async () => {
     setError("");
     setBusy(true);
+
+    // --- Flow B (default): silent handshake using the logged-in session ---
+    setPhase("handshake");
+    try {
+      const { base: usedBase, me } = await connectViaSession();
+      finish(
+        {
+          token: null,
+          baseUrl: usedBase,
+          user: me.user ?? null,
+          dealer: me.dealer ?? null,
+          branch: me.branch ?? null,
+          branches: me.branches ?? [],
+        },
+        "Signed in with your active DealerCore session",
+      );
+      return;
+    } catch (handshakeError) {
+      console.warn(
+        "[dealercore] silent handshake failed, falling back to OAuth:",
+        handshakeError,
+      );
+    }
+
+    // --- Flow A (fallback): first-party OAuth + PKCE ---
+    setPhase("oauth");
     try {
       const token = await launchOAuthLogin(base);
       const me = await fetchMe(base, token);
@@ -50,8 +86,7 @@ const AuthModal = ({ open, onClose, onSuccess, dark }) => {
       await browser.storage.local.set({
         dealercore_session: { ...authData, savedAt: Date.now() },
       });
-      onSuccess(authData);
-      toast.success("Signed in with DealerCore");
+      finish(authData, "Signed in with DealerCore");
     } catch (e) {
       setError(e.message || "Login failed.");
     } finally {
@@ -67,27 +102,6 @@ const AuthModal = ({ open, onClose, onSuccess, dark }) => {
       console.log("[dealercore] auth URL:", url);
     } catch (e) {
       setError(e.message || "Could not open auth page.");
-    }
-  };
-
-  const handleConnectSession = async () => {
-    setError("");
-    setBusy(true);
-    try {
-      const { base: usedBase, me } = await connectViaSession();
-      onSuccess({
-        token: null,
-        baseUrl: usedBase,
-        user: me.user ?? null,
-        dealer: me.dealer ?? null,
-        branch: me.branch ?? null,
-        branches: me.branches ?? [],
-      });
-      toast.success("Connected via active DealerCore session");
-    } catch (e) {
-      setError(e.message || "Could not connect via session.");
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -139,8 +153,8 @@ const AuthModal = ({ open, onClose, onSuccess, dark }) => {
             </h2>
           </div>
           <p className="text-[12px] text-gray-500 dark:text-gray-400 mb-1">
-            First-party OAuth via redirect URI. No client secret is bundled
-            (public client + PKCE).
+            Uses your active DealerCore sign-in automatically. No client secret
+            is bundled (public client + PKCE).
           </p>
           <p className="text-[11px] font-mono text-gray-500 dark:text-gray-400 mb-4 break-all">
             {base}

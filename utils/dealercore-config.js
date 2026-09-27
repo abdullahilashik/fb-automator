@@ -16,6 +16,11 @@ export const DEALERCORE_CONFIG = {
   // (auth-guide §3 Flow B lists client_id as optional). Set true once the
   // client is marked First Party if you want the extra validation.
   HANDSHAKE_SEND_CLIENT_ID: false,
+  // OAuth scopes requested at /oauth/authorize. Left empty because the
+  // guide specifies no scopes; a blank value omits the `scope` param
+  // entirely rather than sending `scope=`, which some Passport setups
+  // reject before they ever get to validating the client.
+  SCOPE: '',
 };
 
 export const DEALERCORE_HOSTS = {
