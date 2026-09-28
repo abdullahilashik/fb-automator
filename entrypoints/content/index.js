@@ -188,26 +188,22 @@ async function reportSync(item, status, message) {
     }
 }
 
-// FB renders "Save draft" as a div (not a role=button). In draft mode the
-// automation clicks it instead of Publish; write-back records the listing id
-// exactly like a publish.
+// FB renders "Save draft" as a div with aria-label="Save Draft" and
+// role="button". Draft mode clicks it instead of Publish.
 const SAVE_DRAFT_SELECTOR = 'div[aria-label="Save Draft"]';
 
 async function clickSaveDraft() {
     console.log('Waiting for Save Draft button...');
-    for (let i = 0; i < 50; i++) { // Max 25 seconds
+    for (let i = 0; i < 60; i++) { // Max 30 seconds
         throwIfCancelled();
         const button = document.querySelector(SAVE_DRAFT_SELECTOR);
         if (button) {
-            const clickTarget = button.closest('[role="button"]') || button;
-            const isDisabled =
-                button.getAttribute('aria-disabled') === 'true' ||
-                clickTarget.getAttribute('aria-disabled') === 'true';
+            const isDisabled = button.getAttribute('aria-disabled') === 'true';
             if (!isDisabled) {
-                console.log('Save Draft button found and enabled, clicking...');
-                clickTarget.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-                clickTarget.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-                clickTarget.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                console.log(`Save Draft button found, clicking (attempt ${i + 1})...`);
+                button.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                button.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
                 return true;
             }
         }
@@ -217,13 +213,13 @@ async function clickSaveDraft() {
     return false;
 }
 
-async function runAutomation(itemsToProcess, startIndex, results) {
+async function runAutomation(itemsToProcess, startIndex, results, runMode) {
     let currentIndex = startIndex || 0;
     let currentResults = results || [];
-    // 'publish' posts the listing; 'draft' stops at the Save draft button and
-    // never hits Publish.
-    const { automation_state } = await browser.storage.local.get(['automation_state']);
-    const runMode = automation_state?.mode === 'draft' ? 'draft' : 'publish';
+    // `runMode` is passed in explicitly ('draft' | 'publish'), never derived
+    // from storage here, so no shared-state race can flip the mode mid-run.
+    if (runMode !== 'draft') runMode = 'publish';
+    console.log(`[draft] run mode = ${runMode}`);
     await setPhase('running', { mode: runMode });
 
     for (let i = currentIndex; i < itemsToProcess.length; i++) {
@@ -245,34 +241,42 @@ async function runAutomation(itemsToProcess, startIndex, results) {
             await processItem(item);
 
             // Sequential button clicks
-            if (await clickButton('Next')) {
+            let saved = false;
+            if (runMode === 'draft') {
+                // Drafts never publish: click "Save Draft" directly from the
+                // form screen — no Next step. If a future FB layout puts the
+                // button behind Next, fall back to that path.
+                saved = await clickSaveDraft();
+                if (!saved && (await clickButton('Next'))) {
+                    throwIfCancelled();
+                    await sleep(2000);
+                    saved = await clickSaveDraft();
+                }
+            } else if (await clickButton('Next')) {
                 throwIfCancelled();
                 await sleep(2000);
-                const saved = runMode === 'draft'
-                    ? await clickSaveDraft()
-                    : await clickButton('Publish');
-                if (saved) {
-                    console.log(`Item ${item.id} ${runMode === 'draft' ? 'draft saved' : 'published'}.`);
-                    currentResults.push({ id: item.id, status: runMode === 'draft' ? "Draft" : "Success" });
-                    // Wait for redirect to finish before moving to next item
-                    await sleep(8000);
-                    // UPDATE_POLICY: 're-publish' — every run (post or update)
-                    // reports as published. To SKIP updates instead, gate the
-                    // write-back + automation on item.dealerCoreStatus, e.g.:
-                    //   if (item.dealerCoreStatus === 'update') { ...skip... }
-                    const { post_id, post_url } = extractPostInfo();
-                    item._lastPostId = post_id;
-                    item._lastPostUrl = post_url;
-                    await reportSync(item, item.dealerCoreStatus === 'update' ? 'updated' : 'created');
-                } else {
-                    throw new Error(
-                        runMode === 'draft'
-                            ? "Save draft button not found/enabled"
-                            : "Publish button not found/enabled",
-                    );
-                }
-            } else {
-                throw new Error("Next button not found/enabled");
+                saved = await clickButton('Publish');
+            }
+            if (!saved) {
+                throw new Error(
+                    runMode === 'draft'
+                        ? "Save draft button not found/enabled"
+                        : "Next/Publish button not found/enabled",
+                );
+            }
+            {
+                console.log(`Item ${item.id} ${runMode === 'draft' ? 'draft saved' : 'published'}.`);
+                currentResults.push({ id: item.id, status: runMode === 'draft' ? "Draft" : "Success" });
+                // Wait for redirect to finish before moving to next item
+                await sleep(8000);
+                // UPDATE_POLICY: 're-publish' — every run (post or update)
+                // reports as published. To SKIP updates instead, gate the
+                // write-back + automation on item.dealerCoreStatus, e.g.:
+                //   if (item.dealerCoreStatus === 'update') { ...skip... }
+                const { post_id, post_url } = extractPostInfo();
+                item._lastPostId = post_id;
+                item._lastPostUrl = post_url;
+                await reportSync(item, item.dealerCoreStatus === 'update' ? 'updated' : 'created');
             }
         } catch (error) {
             // A cancel is not a failure: stop immediately, keep the queue clean.
@@ -319,7 +323,9 @@ async function init() {
         console.log("Resuming automation...");
         const queue = await loadQueue();
         if (queue.length) {
-            await runAutomation(queue, data.currentIndex, data.results);
+            // Resume honours whichever mode the run was started in.
+            const mode = data.automation_state?.mode === 'draft' ? 'draft' : 'publish';
+            await runAutomation(queue, data.currentIndex, data.results, mode);
         }
     }
 }
@@ -334,10 +340,28 @@ export default defineContentScript({
             if (request.action === "START_AUTOMATION") {
                 // Fresh run: clear any previous cancel request.
                 cancelRequested = false;
-                const data = await browser.storage.local.get(['runQueueIds', 'currentIndex', 'results']);
+                const data = await browser.storage.local.get([
+                    'runQueueIds',
+                    'currentIndex',
+                    'results',
+                    'automation_state',
+                ]);
                 const queue = await loadQueue();
                 if (queue.length) {
-                    await runAutomation(queue, data.currentIndex || 0, data.results || []);
+                    // The sidepanel passes the mode in the message itself; only
+                    // fall back to storage when it was omitted.
+                    const mode =
+                        request.mode === 'draft'
+                            ? 'draft'
+                            : data.automation_state?.mode === 'draft'
+                              ? 'draft'
+                              : 'publish';
+                    await runAutomation(
+                        queue,
+                        data.currentIndex || 0,
+                        data.results || [],
+                        mode,
+                    );
                     sendResponse({ status: "Complete" });
                 }
             }

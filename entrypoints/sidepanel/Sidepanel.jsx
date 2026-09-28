@@ -421,11 +421,15 @@ const Sidepanel = () => {
       tab.url &&
       tab.url.startsWith("https://www.facebook.com/marketplace/create/")
     ) {
-      browser.tabs.sendMessage(tab.id, { action: "START_AUTOMATION" }, () => {
-        if (browser.runtime.lastError) {
-          browser.tabs.update(tab.id, { url: TARGET_URL });
-        }
-      });
+      browser.tabs.sendMessage(
+        tab.id,
+        { action: "START_AUTOMATION", mode },
+        () => {
+          if (browser.runtime.lastError) {
+            browser.tabs.update(tab.id, { url: TARGET_URL });
+          }
+        },
+      );
     } else {
       browser.tabs.update(tab.id, { url: TARGET_URL });
     }

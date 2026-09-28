@@ -55,7 +55,11 @@ const Popup = () => {
         runQueueIds: testData.map((d) => d.id),
         currentIndex: 0,
         results: [],
-        automation_state: { phase: "running", cancelRequested: false },
+        automation_state: {
+          phase: "running",
+          cancelRequested: false,
+          mode: "publish",
+        },
       });
       browser.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const tab = tabs[0];
@@ -63,7 +67,10 @@ const Popup = () => {
 
         if (tab.url.startsWith("https://www.facebook.com/marketplace/create/")) {
             // Already on the right page, send message to trigger runAutomation()
-            browser.tabs.sendMessage(tab.id, { action: "START_AUTOMATION" });
+            browser.tabs.sendMessage(tab.id, {
+              action: "START_AUTOMATION",
+              mode: "publish",
+            });
         } else {
             // Navigate to the creation page
             browser.tabs.update(tab.id, { url: targetUrl });
