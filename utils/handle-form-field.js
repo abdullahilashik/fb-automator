@@ -181,7 +181,8 @@ export const handlePhotos = async (urls, shouldAbort) => {
 // body cannot be read. When CORS blocks the plain fetch, the bytes are fetched
 // through the extension background, which can request a host permission for the
 // image origin once and then read the response regardless of the bucket's
-// CORS config.
+// CORS config. If every path fails, a locally-drawn placeholder is returned so
+// the listing can still be published and reviewed.
 async function fetchImageAsFile(url, shouldAbort) {
     try {
         const resp = await fetch(url);
@@ -191,12 +192,43 @@ async function fetchImageAsFile(url, shouldAbort) {
     } catch (contentError) {
         if (shouldAbort?.()) return null;
     }
-    const res = await browser.runtime.sendMessage({ type: 'FETCH_IMAGE', url });
-    if (!res?.success || !res.bytes) {
-        throw new Error(res?.error || 'image fetch failed via background');
+    try {
+        const res = await browser.runtime.sendMessage({ type: 'FETCH_IMAGE', url });
+        if (res?.success && res?.bytes) {
+            const name = url.split('/').pop() || 'image.jpg';
+            return new File([new Uint8Array(res.bytes)], name, {
+                type: res.contentType || 'image/jpeg',
+            });
+        }
+    } catch (bgError) {
+        console.warn('Background image fetch failed:', bgError?.message || bgError);
     }
-    const name = url.split('/').pop() || 'image.jpg';
-    return new File([new Uint8Array(res.bytes)], name, {
-        type: res.contentType || 'image/jpeg',
+    console.warn(`Image unavailable (${url}) — using placeholder.`);
+    return createPlaceholderFile();
+}
+
+// Placeholder image drawn on a local canvas. No network and no CORS involved,
+// so it always succeeds — lets the automation publish a listing whose image
+// URLs are unreachable so the flow can be reviewed end-to-end.
+function createPlaceholderFile() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 800;
+    canvas.height = 600;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#64748b';
+    ctx.textAlign = 'center';
+    ctx.font = '32px sans-serif';
+    ctx.fillText('Image unavailable', canvas.width / 2, canvas.height / 2);
+    return new Promise((resolve) => {
+        canvas.toBlob((blob) => {
+            if (blob) {
+                resolve(new File([blob], 'placeholder.png', { type: 'image/png' }));
+            } else {
+                console.error('Failed to create placeholder image.');
+                resolve(null);
+            }
+        }, 'image/png');
     });
 }

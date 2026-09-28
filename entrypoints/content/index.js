@@ -155,7 +155,11 @@ async function clickButton(label) {
 }
 
 async function generateCSV(results) {
-    const csvContent = "data:text/csv;charset=utf-8," + "ID,Status\n" + results.map(r => `${r.id},${r.status}`).join("\n");
+    const header = "ID,Status,ListingID,PostURL";
+    const rows = (Array.isArray(results) ? results : []).map(
+        (r) => `${r.id},${r.status},${r.listing_id ?? ''},${r.post_url ?? ''}`,
+    );
+    const csvContent = "data:text/csv;charset=utf-8," + [header, ...rows].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -169,6 +173,67 @@ function extractPostInfo() {
     const itemMatch = href.match(/marketplace\/item\/(\d+)/);
     const post_id = itemMatch ? itemMatch[1] : '';
     return { post_id, post_url: post_id ? `https://www.facebook.com/marketplace/item/${post_id}/` : href };
+}
+
+const LISTING_ID_RE = /[?&]listing_id=(\d+)/;
+
+// After Publish, Facebook doesn't always land on the listing URL, so the
+// listing id is read out of the "More options" menu instead:
+//   1. Click the trigger  div[aria-label^="More options for"]
+//   2. Read the menu links div[aria-label="More options for listing"] a[role="menuitem"]
+//   3. Parse listing_id from a menu href like .../edit/?listing_id=...&__tn__=...
+// The menu is closed afterwards so the next iteration can navigate away cleanly.
+async function extractListingIdAfterPublish() {
+    // Step 1: find and open the "More options" menu.
+    let trigger = null;
+    for (let i = 0; i < 60 && !trigger; i++) { // up to 30s
+        throwIfCancelled();
+        trigger = document.querySelector('div[aria-label^="More options for"]');
+        if (!trigger) await sleep(500);
+    }
+    if (!trigger) {
+        console.log('More options trigger not found.');
+        return null;
+    }
+    trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+    trigger.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+    trigger.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+    await sleep(800);
+
+    // Step 2: read the menu item links.
+    let menuLinks = [];
+    for (let i = 0; i < 20 && menuLinks.length === 0; i++) { // up to 10s
+        throwIfCancelled();
+        menuLinks = Array.from(
+            document.querySelectorAll('div[aria-label="More options for listing"] a[role="menuitem"]'),
+        );
+        if (menuLinks.length) break;
+        // Tolerant fallback: any menu item link that carries a listing_id.
+        menuLinks = Array.from(document.querySelectorAll('a[role="menuitem"]')).filter(
+            (a) => LISTING_ID_RE.test(a.getAttribute('href') || ''),
+        );
+        if (!menuLinks.length) await sleep(500);
+    }
+
+    // Step 3: close the menu (Escape), matching Facebook's own dismissal.
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', code: 'Escape', bubbles: true }));
+    await sleep(300);
+
+    // Step 4: extract the first listing id seen.
+    for (const a of menuLinks) {
+        const match = (a.getAttribute('href') || '').match(LISTING_ID_RE);
+        if (match) {
+            const post_id = match[1];
+            console.log(`Extracted listing_id ${post_id} from "${a.getAttribute('href')}".`);
+            return {
+                post_id,
+                post_url: `https://www.facebook.com/marketplace/item/${post_id}/`,
+            };
+        }
+    }
+    console.log('No listing_id found in the More options menu.');
+    return null;
 }
 
 // Best-effort write-back — never throws into the automation loop.
@@ -266,16 +331,25 @@ async function runAutomation(itemsToProcess, startIndex, results, runMode) {
             }
             {
                 console.log(`Item ${item.id} ${runMode === 'draft' ? 'draft saved' : 'published'}.`);
-                currentResults.push({ id: item.id, status: runMode === 'draft' ? "Draft" : "Success" });
                 // Wait for redirect to finish before moving to next item
                 await sleep(8000);
-                // UPDATE_POLICY: 're-publish' — every run (post or update)
-                // reports as published. To SKIP updates instead, gate the
-                // write-back + automation on item.dealerCoreStatus, e.g.:
-                //   if (item.dealerCoreStatus === 'update') { ...skip... }
-                const { post_id, post_url } = extractPostInfo();
+                // Published items: grab the listing id from the "More options"
+                // menu, falling back to a URL parse. Drafts never get a live
+                // listing, so they keep whichever (empty) url follows.
+                const info =
+                    runMode === 'publish'
+                        ? (await extractListingIdAfterPublish()) || extractPostInfo()
+                        : extractPostInfo();
+                const post_id = info?.post_id || '';
+                const post_url = info?.post_url || '';
                 item._lastPostId = post_id;
                 item._lastPostUrl = post_url;
+                currentResults.push({
+                    id: item.id,
+                    status: runMode === 'draft' ? "Draft" : "Success",
+                    listing_id: post_id,
+                    post_url,
+                });
                 await reportSync(item, item.dealerCoreStatus === 'update' ? 'updated' : 'created');
             }
         } catch (error) {
