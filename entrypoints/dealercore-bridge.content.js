@@ -5,7 +5,6 @@ import {
   isDealerCoreHostname,
   tokenKeyFor,
 } from '@/utils/dealercore-config';
-import { mergeDealerCoreVehicles } from '@/utils/default-items';
 
 export const DC_MESSAGE_SOURCE = 'DEALERCORE_FB_EXTENSION';
 export const DC_MESSAGE_TYPE = 'STOCK_FOR_ADVERTISING';
@@ -71,20 +70,18 @@ async function ingestStockEvent(vehicle) {
   if (!vehicle || typeof vehicle !== 'object') {
     return { ok: false, error: 'Unusable vehicle payload.' };
   }
-  const stored = await browser.storage.local.get(['items']);
-  const base = Array.isArray(stored.items) ? stored.items : [];
-  // Upsert-by-dealerCoreId, shared with the sidepanel's §5 API sync so a vehicle
-  // arriving through both channels cannot duplicate or drift apart.
-  const { items: merged, mapped } = mergeDealerCoreVehicles(base, [vehicle]);
-  await browser.storage.local.set({ items: merged });
-  if (mapped.length) {
-    try {
-      await browser.runtime.sendMessage({ action: 'TRIGGER_MARKETPLACE_SYNC', vehicle: mapped[0] });
-    } catch {
-      // Background may not be listening (e.g. sidepanel closed) — storage is source of truth.
-    }
+  // This script runs on the DealerCore page origin, so it cannot write the
+  // extension's IndexedDB directly. The background upserts into Dexie, which
+  // is now the single source of truth for the vehicle worklist.
+  try {
+    const response = await browser.runtime.sendMessage({
+      type: 'SAVE_SINGLE_VEHICLE',
+      payload: vehicle,
+    });
+    return { ok: response?.success ?? false, error: response?.error };
+  } catch (err) {
+    return { ok: false, error: String(err) };
   }
-  return { ok: true, total: merged.length };
 }
 
 export default defineContentScript({

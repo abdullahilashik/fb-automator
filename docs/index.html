@@ -245,8 +245,12 @@
         </div>
         <p class="mt-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
           Routes <code class="font-mono text-[12px]">NAVIGATE_TO_CREATE</code>,
-          <code class="font-mono text-[12px]">TRIGGER_MARKETPLACE_SYNC</code> and
-          <code class="font-mono text-[12px]">DEALERCORE_LOGOUT</code>. Knows nothing about OAuth.
+          <code class="font-mono text-[12px]">DEALERCORE_LOGOUT</code> and the Dexie vehicle messages
+          (<code class="font-mono text-[12px]">SYNC_VEHICLES</code>, <code class="font-mono text-[12px]">GET_VEHICLES</code>, …).
+          IndexedDB (<code class="font-mono text-[12px]">utils/db.ts</code>) is the source of truth for the vehicle
+          worklist, and the background is the only process that can write it from
+          content scripts (which run on the <em>page</em> origin and cannot see the
+          extension's IndexedDB). Knows nothing about OAuth.
         </p>
       </div>
       <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
@@ -328,14 +332,14 @@
             <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/dealercore-bridge.content.js</td>
             <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Runs on DealerCore pages. Owns the handshake and the vehicle listener.</td>
             <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
-              silentHandshake <span class="text-slate-400">:13</span><br />
-              ingestStockEvent <span class="text-slate-400">:70</span><br />
-              429 guard <span class="text-slate-400">:36</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
-              double-inject guard <span class="text-slate-400">:103</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
-              matches <span class="text-slate-400">:95</span><br />
-              auto-handshake <span class="text-slate-400">:105</span><br />
-              origin guard <span class="text-slate-400">:109</span><br />
-              DC_RUN_HANDSHAKE <span class="text-slate-400">:125</span>
+              silentHandshake <span class="text-slate-400">:12</span><br />
+              ingestStockEvent <span class="text-slate-400">:69</span><br />
+              429 guard <span class="text-slate-400">:32</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              double-inject guard <span class="text-slate-400">:100</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              matches <span class="text-slate-400">:88</span><br />
+              auto-handshake <span class="text-slate-400">:106</span><br />
+              origin guard <span class="text-slate-400">:111</span><br />
+              DC_RUN_HANDSHAKE <span class="text-slate-400">:126</span>
             </td>
           </tr>
           <tr>
@@ -381,23 +385,32 @@
           </tr>
           <tr>
             <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/sidepanel/Sidepanel.jsx</td>
-            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Derives "connected" from real session state; orchestrates sign-out.</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Reads the worklist live from Dexie via <code class="font-mono">useLiveQuery</code>; orchestrates selection, sync, publish and cancel.</td>
             <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
-              connection derivation <span class="text-slate-400">:65</span><br />
-              auto-connect effect <span class="text-slate-400">:87</span><br />
-              connecting placeholder <span class="text-slate-400">:344</span><br />
-              storage listener <span class="text-slate-400">:129</span><br />
-              handleLogout <span class="text-slate-400">:212</span>
+              useLiveQuery <span class="text-slate-400">:52</span><br />
+              items derivation <span class="text-slate-400">:54</span><br />
+              loadData <span class="text-slate-400">:86</span><br />
+              auto-connect effect <span class="text-slate-400">:145</span><br />
+              syncFromDealerCore <span class="text-slate-400">:204</span><br />
+              handleRefresh <span class="text-slate-400">:240</span><br />
+              handleLogout <span class="text-slate-400">:347</span><br />
+              startAutomation <span class="text-slate-400">:382</span><br />
+              cancelAutomation <span class="text-slate-400">:431</span>
             </td>
           </tr>
           <tr>
             <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/background.js</td>
             <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Message router. Deliberately knows nothing about OAuth.</td>
-            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
-              listener <span class="text-slate-400">:12</span><br />
-              NAVIGATE_TO_CREATE <span class="text-slate-400">:14</span><br />
-              TRIGGER_MARKETPLACE_SYNC <span class="text-slate-400">:21</span><br />
-              DEALERCORE_LOGOUT <span class="text-slate-400">:37</span>
+            <td class="px-4 py-3 font-mono text-slate-500 dark:text-slate-400">
+              listener <span class="text-slate-400">:55</span><br />
+              migrateLegacyItems <span class="text-slate-400">:34</span><br />
+              NAVIGATE_TO_CREATE <span class="text-slate-400">:57</span><br />
+              DEALERCORE_LOGOUT <span class="text-slate-400">:64</span><br />
+              SYNC_VEHICLES <span class="text-slate-400">:71</span><br />
+              SAVE_SINGLE_VEHICLE <span class="text-slate-400">:98</span><br />
+              UPDATE_VEHICLES <span class="text-slate-400">:111</span><br />
+              GET_VEHICLES <span class="text-slate-400">:127</span><br />
+              CLEAR_VEHICLES <span class="text-slate-400">:139</span>
             </td>
           </tr>
           <tr>
@@ -425,8 +438,15 @@
 
     <h3 id="storage" class="anchor">Storage keys</h3>
     <p>
-      All state is in <code class="font-mono text-[13px]">browser.storage.local</code>. The token is
-      the single source of truth — the UI never keeps its own copy.
+      Auth state lives in <code class="font-mono text-[13px]">browser.storage.local</code>; the token is
+      the single source of truth for <em>authentication</em> — the UI never keeps its own copy.
+      The <strong>vehicle worklist</strong> lives in an IndexedDB table via <b>Dexie</b>
+      (<code class="font-mono text-[13px]">utils/db.ts</code>, DB <code class="font-mono text-[13px]">VehicleExtensionDB</code>,
+      table <code class="font-mono text-[13px]">vehicles</code>) so it can be filtered/sorted by nested indexed
+      fields and stays live for the sidepanel via <code class="font-mono text-[13px]">useLiveQuery()</code>.
+      Only the background writes that table; content scripts — which run on the <em>page</em> origin —
+      reach it through the messages below. A one-time migration lifts any legacy
+      <code class="font-mono text-[13px]">storage.local.items</code> into Dexie on startup and deletes the old key.
     </p>
 
     <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
@@ -439,6 +459,8 @@
         </thead>
         <tbody class="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[12.5px]">
           <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">token_&lt;origin&gt;</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">The Bearer token, one entry per environment (<code class="font-mono text-[12px]">token_https://dev.dealercore.com.au</code>).</td></tr>
+          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">refresh_&lt;origin&gt;</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Optional OAuth refresh token, per environment. Rotated on every successful refresh; cleared on sign-out.</td></tr>
+          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">runQueueIds</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">The per-run selection (vehicle primary keys). The only run-queue state stored outside Dexie; replaces the old <code class="font-mono text-[12px]">items</code> payload. Cleared on cancel/complete.</td></tr>
           <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">dealercore_base_url</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Active origin. Re-derived from the active tab when that tab is a DealerCore page.</td></tr>
           <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">dealercore_session</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Cached <code class="font-mono text-[12px]">user / dealer / branch / branches / savedAt</code>. UI convenience only — never used to authorise a request.</td></tr>
           <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">dealercore_signed_out</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Boolean latch. Blocks the automatic handshake after an explicit sign-out.</td></tr>
@@ -466,6 +488,11 @@
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">DEALERCORE_SESSION_READY</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">content → runtime</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Advisory ping so the UI can refresh. Safe to fail silently.</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">STOCK_FOR_ADVERTISING</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">page → content (<code class="font-mono">postMessage</code>)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Vehicle payload from the DealerCore app. Requires <code class="font-mono">source: 'DEALERCORE_FB_EXTENSION'</code>.</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">DEALERCORE_LOGOUT</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">sidepanel → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Broadcast sign-out so every surface drops its copy.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">SYNC_VEHICLES</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">sidepanel / feed → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Bulk-upsert raw <code class="font-mono">Vehicle[]</code>; assigns ids to synthetic rows and returns <code class="font-mono">added/updated</code> counts. Ids missing from the payload are auto-incremented so a key gap can't fail the write.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">SAVE_SINGLE_VEHICLE</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">bridge → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Upsert one <code class="font-mono">Vehicle</code> by primary key <code class="font-mono">id</code>.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">UPDATE_VEHICLES</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">any → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Patch fields (e.g. facebook post id) without replacing the whole record.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">GET_VEHICLES</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">content / sidepanel → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Read the whole Dexie list. How the facebook.com automation and sidepanel load the worklist (content scripts can't reach extension IndexedDB).</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">CLEAR_VEHICLES</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">sidepanel → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Empty the Dexie vehicle table.</td></tr>
         </tbody>
       </table>
     </div>
@@ -527,7 +554,7 @@
 
     <!-- ───── flow B ───── -->
     <h2 id="flow-b" class="anchor">Flow B · Silent handshake</h2>
-    <p class="fileref">entrypoints/<b>dealercore-bridge.content.js</b> → <b>silentHandshake()</b> :13 · driven by utils/<b>dealercore-api.js</b> → <b>connectViaSession()</b> :243</p>
+    <p class="fileref">entrypoints/<b>dealercore-bridge.content.js</b> → <b>silentHandshake()</b> :12 · driven by utils/<b>dealercore-api.js</b> → <b>connectViaSession()</b> :243</p>
     <p class="text-[15px]">
       <span class="rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">Default path</span>
     </p>
@@ -594,7 +621,7 @@
 
     <!-- ───── flow A ───── -->
     <h3 id="auto-connect" class="anchor">Auto-connect on open</h3>
-    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>tryAutoConnect()</b> :402 · <b>handshakeFromExtension()</b> :370 · <b>connectViaSession()</b> :280 · <b>ensureBridgeInjected()</b> :257 — entrypoints/sidepanel/<b>Sidepanel.jsx</b> :111</p>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>tryAutoConnect()</b> :438 · <b>handshakeFromExtension()</b> :395 · <b>connectViaSession()</b> :305 · <b>ensureBridgeInjected()</b> :282 — entrypoints/sidepanel/<b>Sidepanel.jsx</b> :141</p>
     <p>
       Opening the sidepanel attempts the handshake on its own. In the common case the user never
       touches a login button — the panel is simply already connected. There is no prerequisite tab
@@ -840,39 +867,71 @@
 
     <!-- ───── lifecycle ───── -->
     <h2 id="lifecycle" class="anchor">Token lifecycle</h2>
-    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>authed()</b> :413 · <b>getAccessToken()</b> :35 · <b>verifySession()</b> :475</p>
-    <p>Every authenticated call funnels through one wrapper, which is why a dead token can never leak into the UI as a stale success.</p>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>authed()</b> :641 · <b>refreshViaRefreshToken()</b> :596 · <b>getAccessToken()</b> :36 · <b>verifySession()</b> :795</p>
+    <p>Every authenticated call funnels through one wrapper, so a dead token can never leak into the UI as a stale success.</p>
 
     <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
       <pre class="nice-scroll overflow-x-auto bg-slate-900 p-4 font-mono text-[12.5px] leading-relaxed text-slate-100"><code><span class="text-sky-300">async function</span> <span class="text-amber-300">authed</span>(base, token, path, options = {}) {
-  <span class="text-sky-300">const</span> res = <span class="text-sky-300">await</span> <span class="text-amber-300">fetch</span>(<span class="text-emerald-300">`${base}${path}`</span>, { ...options, headers: {
+  <span class="text-sky-300">const</span> url = <span class="text-emerald-300">`${base}${path}`</span>;
+  <span class="text-sky-300">const</span> send = (bearer) =&gt; ({ ...options, headers: {
     Accept: <span class="text-emerald-300">'application/json'</span>,
     <span class="text-emerald-300">'Content-Type'</span>: <span class="text-emerald-300">'application/json'</span>,
-    Authorization: <span class="text-emerald-300">`Bearer ${token}`</span>,
-    ...options.headers,
+    Authorization: <span class="text-emerald-300">`Bearer ${bearer}`</span>,
+    ...(options.headers || {}),
   }});
 
+  <span class="text-sky-300">let</span> res = <span class="text-sky-300">await</span> fetchWithRateLimitRetry(url, send(token), <span class="text-amber-300">3</span>);
+
+  <span class="text-slate-500">// Guide §336 fallback: on 401 try one silent token renewal before giving up.</span>
   <span class="text-sky-300">if</span> (res.status === <span class="text-amber-300">401</span>) {
-    <span class="text-slate-500">// Drop it so the UI falls back to the login button.</span>
-    <span class="text-sky-300">await</span> browser.storage.local.<span class="text-amber-300">remove</span>([<span class="text-amber-300">tokenKeyFor</span>(base)]);
-    <span class="text-sky-300">throw new</span> <span class="text-rose-300">Error</span>(<span class="text-emerald-300">'Unauthenticated (401). Please log in again.'</span>);
+    <span class="text-sky-300">try</span> {
+      <span class="text-sky-300">const</span> refreshed = <span class="text-sky-300">await</span> refreshViaRefreshToken(base);
+      res = <span class="text-sky-300">await</span> fetchWithRateLimitRetry(url, send(refreshed), <span class="text-amber-300">3</span>);
+    } <span class="text-sky-300">catch</span> { <span class="text-slate-500">/* no usable refresh token — treat as signed out */</span> }
   }
+
+  <span class="text-sky-300">if</span> (res.status === <span class="text-amber-300">429</span>) <span class="text-sky-300">throw</span> rateLimitedError();
+  <span class="text-sky-300">if</span> (res.status === <span class="text-amber-300">401</span>) {
+    <span class="text-slate-500">// Still 401 after refresh — genuinely signed out.</span>
+    <span class="text-sky-300">await</span> browser.storage.local.<span class="text-amber-300">remove</span>([<span class="text-amber-300">tokenKeyFor</span>(base)]);
+    <span class="text-sky-300">throw</span> unauthenticatedError();
+  }
+  <span class="text-sky-300">if</span> (res.status === <span class="text-amber-300">403</span>) <span class="text-sky-300">throw</span> forbiddenError();
   <span class="text-sky-300">if</span> (!res.ok) <span class="text-sky-300">throw new</span> <span class="text-rose-300">Error</span>(<span class="text-emerald-300">`DealerCore request failed (${res.status}).`</span>);
   <span class="text-sky-300">return</span> res.<span class="text-amber-300">json</span>();
 }</code></pre>
     </div>
 
     <p class="mt-4">
+      Tokens renew in one of two ways. OAuth sessions store a per-environment
+      <code class="font-mono text-[13px]">refresh_*</code> key (<b>refreshViaRefreshToken()</b> :596); a handshake
+      session has none, so a 401 falls back to re-running the silent handshake. Both paths fail to the
+      Login button, never to a stale success.
+    </p>
+    <p class="mt-2">
       Self-healing also happens passively: because every DealerCore page load fires a handshake, a
       user who re-authenticates in the browser is picked up automatically the next time they visit
       the app — no extension interaction required.
     </p>
 
+    <h3 id="throttling" class="anchor">§8 — Throttling guard</h3>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>fetchWithRateLimitRetry()</b> :221</p>
+    <p>
+      Handshakes are capped at 30/min and authenticated APIs at 120/min (see auth-guide §8 and §9/§15).
+      Every API call goes through <b>fetchWithRateLimitRetry()</b>, which reads
+      <code class="font-mono text-[13px]">Retry-After</code> on a <code class="font-mono text-[13px]">429</code> and
+      re-sends after the server-appointed wait (at most three attempts, then it surfaces a
+      <code class="font-mono text-[13px]">rateLimited</code> error the UI can display). Bulk syncs are additionally
+      capped at 10 pages / 250 vehicles (<b>fetchAllVehicles()</b> :720) so a large inventory cannot
+      burn the whole budget. The bridge duplicates this by reporting <code class="font-mono text-[13px]">rateLimited</code>
+      instead of pretending success (<span class="text-slate-400">dealercore-bridge.content.js :32</span>).
+    </p>
+
     <h2 id="signout" class="anchor">Sign out</h2>
-    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>clearDealerCoreSession()</b> :389 · triggered from <b>Sidepanel.jsx</b> → <b>handleLogout()</b> :184 · routed by <b>background.js</b> :37</p>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>clearDealerCoreSession()</b> :773 · triggered from <b>Sidepanel.jsx</b> → <b>handleLogout()</b> :356 · routed by <b>background.js</b> :42</p>
     <p>Sign-out must work identically regardless of which flow authenticated the session, so it never inspects the UI's auth object.</p>
     <ol>
-      <li>Remove <strong>every</strong> <code class="font-mono text-[13px]">token_*</code> key, not just the active origin — otherwise a stale dev token can silently reconnect after switching to prod.</li>
+      <li>Remove <strong>every</strong> <code class="font-mono text-[13px]">token_*</code> and <code class="font-mono text-[13px]">refresh_*</code> key, not just the active origin — otherwise a stale dev token, or a spent refresh token, can silently reconnect after switching to prod.</li>
       <li>Remove <code class="font-mono text-[13px]">dealercore_session</code> and <code class="font-mono text-[13px]">auth</code>.</li>
       <li>Set <code class="font-mono text-[13px]">dealercore_signed_out = true</code> to latch the automatic handshake off.</li>
     </ol>
@@ -1110,7 +1169,7 @@ npx wxt</code></pre>
     </div>
 
     <h2 id="errors" class="anchor">Error decoder</h2>
-    <p class="fileref">Messages produced by <b>explainProbe()</b> :139, <b>launchOAuthLogin()</b> :363 and <b>authed()</b> :413</p>
+    <p class="fileref">Messages produced by <b>explainProbe()</b> :140, <b>launchOAuthLogin()</b> :534 and <b>authed()</b> :641</p>
     <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
       <table class="min-w-full text-left text-sm">
         <thead class="bg-slate-50 dark:bg-slate-800/60">

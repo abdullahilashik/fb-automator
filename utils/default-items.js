@@ -214,3 +214,70 @@ export function fromDealerCoreVehicle(apiVehicle) {
     description: String(apiVehicle.description ?? ''),
   };
 }
+
+/**
+ * Inverse of fromDealerCoreVehicle: turn a flat automation item (as used by the
+ * feed page, popup test data, and legacy storage.local `items`) back into a raw
+ * Dexie `Vehicle` row so everything shares one IndexedDB store.
+ *
+ * `id` is preserved from the flat item when present (Dexie's primary key);
+ * callers that need auto-increment handle assignment in the background.
+ */
+export function toDealerCoreVehicle(flat) {
+  if (!flat || typeof flat !== 'object') return null;
+  const details = flat.details || {};
+  const pricing = flat.pricing || {};
+
+  return {
+    id: Number.isFinite(Number(flat.id)) ? Number(flat.id) : (flat.dealerCoreId ?? null),
+    status: flat.dealerCoreStatus || 'post',
+    facebook: flat.dealerCoreFacebook || {
+      account_id: flat.account_id ?? '',
+      post_id: flat.post_id ?? '',
+      post_url: flat.post_url ?? '',
+    },
+    details: {
+      year: Number(flat.year ?? details.year) || null,
+      make: String(flat.make ?? details.make ?? ''),
+      model: String(flat.model ?? details.model ?? ''),
+      badge: details.badge ?? '',
+      series: details.series ?? '',
+      body_style: String(flat.bodyStyle ?? details.body_style ?? details.body_type ?? ''),
+      body_type: String(flat.bodyStyle ?? details.body_type ?? details.body_style ?? ''),
+      mileage: Number(flat.mileage ?? details.mileage ?? details.odometer) || null,
+      odometer: Number(details.odometer) || null,
+      odometer_unit: details.odometer_unit ?? '',
+      price: Number(flat.price ?? pricing.price ?? pricing.advertised_price) || null,
+      condition: String(flat.condition ?? details.condition ?? ''),
+      fuel_type: String(flat.fuelType ?? details.fuel_type ?? ''),
+      transmission: String(flat.transmission ?? details.transmission ?? ''),
+      transmission_type: details.transmission_type ?? '',
+      colour: String(flat.exteriorColour ?? details.colour ?? ''),
+      vin: details.vin ?? '',
+      registration_no: details.registration_no ?? '',
+      registration_state: details.registration_state ?? '',
+      registration_expiry: details.registration_expiry ?? '',
+    },
+    pricing: {
+      price: Number(flat.price ?? pricing.price ?? pricing.advertised_price) || null,
+      advertised_price: Number(pricing.advertised_price) || null,
+      discount_price: pricing.discount_price ?? null,
+      price_type: pricing.price_type ?? '',
+    },
+    description: String(flat.description ?? ''),
+    description_templates: {
+      title: '',
+      features: '',
+      comments: '',
+      offering: '',
+      warranty: '',
+      tags: '',
+      signature: '',
+    },
+    images: Array.isArray(flat.imageUrls) ? flat.imageUrls.slice(0, 20) : [],
+    timestamps: {
+      vehicle_updated_at: flat.vehicle_updated_at ?? null,
+      last_synced_at: flat.last_synced_at ?? null,
+    },
+  };
+}

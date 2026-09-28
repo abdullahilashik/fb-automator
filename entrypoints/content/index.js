@@ -3,6 +3,7 @@ import { browser } from 'wxt/browser';
 import { findLabelByText } from '@/utils/find-label-by';
 import { handleAutosuggestDropdown, handleCheckbox, handleDropdown, handlePhotos } from '@/utils/handle-form-field';
 import { typeLikeHuman } from '@/utils/input-simulation';
+import { fromDealerCoreVehicle } from '@/utils/default-items';
 import { sleep } from '@/utils/sleep';
 import { writeBackSync } from '@/utils/dealercore-api';
 
@@ -49,9 +50,27 @@ async function abortRun(results, pendingId) {
         results.push({ id: pendingId, status: 'Cancelled' });
     }
     console.log('Automation cancelled by user.');
-    await browser.storage.local.remove(['items', 'currentIndex']);
+    await browser.storage.local.remove(['runQueueIds', 'currentIndex']);
     await browser.storage.local.set({ results });
     await setPhase('cancelled', { finishedAt: Date.now() });
+}
+
+// The vehicle list lives in the extension's IndexedDB (Dexie). This content
+// script runs against the facebook.com page origin, so it cannot touch that DB
+// directly — it reads through the background worker and keeps only the
+// per-run `runQueueIds` selection in storage.
+async function loadQueue() {
+    const { runQueueIds } = await browser.storage.local.get(['runQueueIds']);
+    if (!Array.isArray(runQueueIds) || runQueueIds.length === 0) return [];
+    const res = await browser.runtime.sendMessage({ type: 'GET_VEHICLES' });
+    const vehicles = Array.isArray(res?.vehicles) ? res.vehicles : [];
+    const wanted = new Set(runQueueIds);
+    const queue = [];
+    for (const v of vehicles) {
+        const item = fromDealerCoreVehicle(v);
+        if (item && wanted.has(v.id)) queue.push({ ...item, id: v.id });
+    }
+    return queue;
 }
 
 async function processItem(item) {
@@ -237,21 +256,31 @@ async function runAutomation(itemsToProcess, startIndex, results) {
 
     // Automation complete
     await generateCSV(currentResults);
-    await browser.storage.local.remove(['items', 'currentIndex', 'results']);
+    // Keep `results` so the panel can render which vehicles succeeded; only
+    // the run queue and progress are dropped. The Dexie master list survives.
+    await browser.storage.local.remove(['runQueueIds', 'currentIndex']);
     await setPhase('complete', { finishedAt: Date.now() });
     console.log("Automation Complete");
 }
 
 async function init() {
-    const data = await browser.storage.local.get(['items', 'currentIndex', 'results', 'automation_state']);
+    const data = await browser.storage.local.get([
+        'runQueueIds',
+        'currentIndex',
+        'results',
+        'automation_state',
+    ]);
     // Never auto-resume a queue the user cancelled.
     if (data.automation_state?.cancelRequested) {
         console.log("Cancel requested — not resuming.");
         return;
     }
-    if (data.items && window.location.href.includes(TARGET_URL)) {
+    if (data.runQueueIds && window.location.href.includes(TARGET_URL)) {
         console.log("Resuming automation...");
-        await runAutomation(data.items, data.currentIndex, data.results);
+        const queue = await loadQueue();
+        if (queue.length) {
+            await runAutomation(queue, data.currentIndex, data.results);
+        }
     }
 }
 
@@ -265,9 +294,10 @@ export default defineContentScript({
             if (request.action === "START_AUTOMATION") {
                 // Fresh run: clear any previous cancel request.
                 cancelRequested = false;
-                const data = await browser.storage.local.get(['items', 'currentIndex', 'results']);
-                if (data.items) {
-                    await runAutomation(data.items, data.currentIndex || 0, data.results || []);
+                const data = await browser.storage.local.get(['runQueueIds', 'currentIndex', 'results']);
+                const queue = await loadQueue();
+                if (queue.length) {
+                    await runAutomation(queue, data.currentIndex || 0, data.results || []);
                     sendResponse({ status: "Complete" });
                 }
             }

@@ -11,8 +11,9 @@ import AuthModal from "./AuthModal";
 import Settings from "./pages/Settings";
 import Listing, { buildVehicles } from "./pages/Listing";
 import NotConnected from "./pages/NotConnected";
-// import { DEFAULT_ITEMS, mergeDealerCoreVehicles } from "@/utils/default-items";
-import { mergeDealerCoreVehicles } from "@/utils/default-items";
+import { fromDealerCoreVehicle } from "@/utils/default-items";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "@/utils/db";
 import {
   getAccessToken,
   fetchMe,
@@ -23,8 +24,6 @@ import {
   fetchAllVehicles,
 } from "@/utils/dealercore-api";
 
-// Dexie imports
-
 const TARGET_URL = "https://www.facebook.com/marketplace/create/vehicle";
 
 // A failing auto-connect can settle in single-digit milliseconds, so the
@@ -32,7 +31,6 @@ const TARGET_URL = "https://www.facebook.com/marketplace/create/vehicle";
 const MIN_CONNECTING_MS = 450;
 
 const Sidepanel = () => {
-  const [items, setItems] = useState([]);
   const [results, setResults] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -47,46 +45,71 @@ const Sidepanel = () => {
   const avatarMenuRef = useRef(null);
   const [isConnected, setIsConnected] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const selectionInitRef = useRef(false);
 
-  // const vehiclesDb = useLiveQuery(() => db.vehicles.orderBy('id').reverse().toArray()); // get the latest first
+  // Dexie (IndexedDB) is the source of truth for the vehicle list, so the
+  // panel stays live against bridge/feed/automation writes without poll timers.
+  const rawVehicles = useLiveQuery(() => db.vehicles.toArray(), []) ?? [];
+
+  const items = useMemo(() => {
+    const out = [];
+    for (const v of rawVehicles) {
+      const it = fromDealerCoreVehicle(v);
+      if (it) out.push({ ...it, id: v.id });
+    }
+    return out;
+  }, [rawVehicles]);
 
   const vehicles = useMemo(
     () => buildVehicles(items, results, currentIndex, running),
     [items, results, currentIndex, running],
   );
 
+  // Auto-select all once when a list is first shown and the user hasn't
+  // chosen a selection yet (mirrors the pre-Dexie initial-load default).
   useEffect(() => {
-    handleConnect().then((res) => {
-      console.log("Hanlde connect response");
+    if (selectionInitRef.current || !items.length) return;
+    setSelectedIds((prev) => {
+      if (prev.size) {
+        selectionInitRef.current = true;
+        return prev;
+      }
+      return new Set(items.map((it) => it.id));
     });
-  }, []);
+    selectionInitRef.current = true;
+  }, [items]);
+
+  // NOTE: there used to be a mount-time `handleConnect()` call here that popped
+  // the OAuth flow on every open. That contradicts the approved silent
+  // handshake design, so Flow A now only starts from the landing button.
 
   const loadData = useCallback(async () => {
     try {
       const data = await browser.storage.local.get([
-        "items",
         "results",
         "currentIndex",
         "selectedIds",
         "auth",
         "dealercore_session",
+        "runQueueIds",
+        "automation_state",
       ]);
-      const storedItems = []; // Array.isArray(data.items) && data.items.length ? data.items : DEFAULT_ITEMS;
       const storedResults = Array.isArray(data.results) ? data.results : [];
       const storedIndex = data.currentIndex || 0;
       const storedSelected = Array.isArray(data.selectedIds)
         ? new Set(data.selectedIds)
-        : new Set(storedItems.map((it) => it.id));
+        : new Set();
 
-      setItems(storedItems);
       setResults(storedResults);
       setCurrentIndex(storedIndex);
-      setSelectedIds(storedSelected);
+      if (storedSelected.size) setSelectedIds(storedSelected);
       if (data.auth) setAuth(data.auth);
       else if (data.dealercore_session?.user) setAuth(data.dealercore_session);
+      // Detect an in-progress run when the panel opens mid-way.
       setRunning(
-        !!data.items &&
-          !(storedResults.length && storedResults.length >= storedItems.length),
+        !!data.runQueueIds &&
+          data.automation_state?.phase !== "complete" &&
+          data.automation_state?.phase !== "cancelled",
       );
     } finally {
       setLoading(false);
@@ -184,30 +207,21 @@ const Sidepanel = () => {
       const vehicleData = await fetchAllVehicles();
       const { vehicles, meta, truncated } = vehicleData;
 
-      // local database sync: start
+      let added = 0;
+      let updated = 0;
       if (Array.isArray(vehicles) && vehicles.length > 0) {
         const response = await browser.runtime.sendMessage({
           type: "SYNC_VEHICLES",
-          payload: vehicles, // Pass the array, not the parent object
+          payload: vehicles,
         });
-
-        if (response?.success) {
-          console.log(`Local sync successful: ${response.count} items saved.`);
+        if (!response?.success) {
+          throw new Error(response?.error || "Local vehicle sync failed");
         }
+        added = response.added || 0;
+        updated = response.updated || 0;
       }
-      // local database sync: ends
 
-      const stored = await browser.storage.local.get(["items"]);
-      const base = Array.isArray(stored.items) ? stored.items : [];
-      const { items, added, updated } = mergeDealerCoreVehicles(base, vehicles);
-      await browser.storage.local.set({ items });
-      setItems(items);
       setSyncMeta(meta);
-      // Respect the user's existing choices; only fall back to select-all when
-      // nothing was selected, matching the initial-load default.
-      setSelectedIds((prev) =>
-        prev.size ? prev : new Set(items.map((it) => it.id)),
-      );
       const bits = [`${added} new`, `${updated} updated`];
       if (truncated) bits.push("list truncated");
       toast.success(`Synced from DealerCore — ${bits.join(", ")}`);
@@ -228,44 +242,21 @@ const Sidepanel = () => {
     await loadData();
   }, [syncFromDealerCore, loadData]);
 
-  // Live-update when items are appended externally (e.g. index.html postMessage feed).
-  useEffect(() => {
-    const listener = (changes, area) => {
-      if (area !== "local" || !changes.items) return;
-      const next = changes.items.newValue;
-      if (!Array.isArray(next)) return;
-      setItems(next);
-      setSelectedIds((prev) => {
-        if (prev.size === 0) return new Set(next.map((it) => it.id));
-        const ids = new Set(next.map((it) => it.id));
-        const kept = new Set([...prev].filter((id) => ids.has(id)));
-        // Auto-select newly arrived ids so they are included by default.
-        next.forEach((it) => {
-          if (!prev.has(it.id)) kept.add(it.id);
-        });
-        return kept;
-      });
-    };
-    browser.storage.onChanged.addListener(listener);
-    return () => browser.storage.onChanged.removeListener(listener);
-  }, []);
-
   useEffect(() => {
     if (!running) return;
     const timer = setInterval(async () => {
       const data = await browser.storage.local.get([
-        "items",
         "results",
         "currentIndex",
+        "runQueueIds",
         "automation_state",
       ]);
-      if (Array.isArray(data.items)) {
-        setItems(data.items);
-      }
       if (Array.isArray(data.results)) {
         setResults(data.results);
-        const targetItems = Array.isArray(data.items) ? data.items : items;
-        if (targetItems.length && data.results.length >= targetItems.length) {
+        const expected = Array.isArray(data.runQueueIds)
+          ? data.runQueueIds.length
+          : 0;
+        if (expected && data.results.length >= expected) {
           setRunning(false);
           toast.success("All selected listings processed");
         }
@@ -273,11 +264,11 @@ const Sidepanel = () => {
       if (data.currentIndex !== undefined) {
         setCurrentIndex(data.currentIndex);
       }
-      if (data.items === undefined && data.results === undefined) {
+      // The run queue is cleared on cancel/complete, so treat that and the
+      // phase as authoritative for stopping the "running" state.
+      if (!data.runQueueIds) {
         setRunning(false);
       }
-      // The queue is cleared on cancel/complete, so treat the phase as
-      // authoritative for stopping the "running" state.
       if (
         data.automation_state?.phase === "cancelled" ||
         data.automation_state?.phase === "complete"
@@ -286,7 +277,7 @@ const Sidepanel = () => {
       }
     }, 1500);
     return () => clearInterval(timer);
-  }, [running, items]);
+  }, [running]);
 
   useEffect(() => {
     browser.storage.local.set({ selectedIds: Array.from(selectedIds) });
@@ -395,8 +386,10 @@ const Sidepanel = () => {
       return;
     }
 
+    // The vehicle data already lives in Dexie; storage only carries the
+    // per-run queue (which vehicle ids, progress, and results).
     await browser.storage.local.set({
-      items: selectedItems,
+      runQueueIds: selectedItems.map((it) => it.id),
       currentIndex: 0,
       results: [],
       // Fresh run clears any previous cancel request.
@@ -405,7 +398,6 @@ const Sidepanel = () => {
     setCancelling(false);
 
     const itemIds = new Set(selectedItems.map((it) => it.id));
-    setItems(selectedItems);
     setResults([]);
     setCurrentIndex(0);
     setRunning(true);
@@ -450,11 +442,10 @@ const Sidepanel = () => {
       const cleared = await new Promise((resolve) => {
         const startedAt = Date.now();
         const timer = setInterval(async () => {
-          const data = await browser.storage.local.get([
-            "items",
-            "automation_state",
-          ]);
-          if (!data.items) {
+          const data = await browser.storage.local.get(
+            ["runQueueIds", "automation_state"],
+          );
+          if (!data.runQueueIds) {
             clearInterval(timer);
             resolve(true);
           } else if (Date.now() - startedAt > 8000) {
@@ -466,7 +457,7 @@ const Sidepanel = () => {
 
       if (!cleared) {
         await browser.storage.local.remove([
-          "items",
+          "runQueueIds",
           "currentIndex",
           "results",
         ]);
@@ -479,8 +470,6 @@ const Sidepanel = () => {
       setRunning(false);
       setResults([]);
       setCurrentIndex(0);
-      const { items: latest } = await browser.storage.local.get(["items"]);
-      if (Array.isArray(latest)) setItems(latest);
     } catch (e) {
       toast.error(e?.message || "Could not cancel");
     } finally {

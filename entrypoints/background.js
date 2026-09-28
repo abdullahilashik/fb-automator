@@ -1,18 +1,56 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { browser } from 'wxt/browser';
-import { appendVehicles } from '@/utils/default-items';
+import { toDealerCoreVehicle } from '@/utils/default-items';
 import { clearDealerCoreSession } from '@/utils/dealercore-api';
-import { fromDealerCoreVehicle } from '@/utils/default-items';
 
+// Dexie (IndexedDB) is the source of truth for the vehicle worklist.
+import { db } from '@/utils/db';
 
-// Dexie Operations
-import {db} from '@/utils/db';
+/**
+ * Content scripts (facebook.com / dealercore.com.au) run against the *page*
+ * origin, so they can never see the extension's IndexedDB. Every vehicle read
+ * or write therefore funnels through these background handlers.
+ */
 
+// Assign sequential numeric ids to rows that lack one (synthetic feed/test
+// payloads). API responses always carry their own `id`.
+async function assignMissingIds(rows) {
+  const missing = rows.filter((r) => !Number.isFinite(Number(r?.id)));
+  if (missing.length === 0) return rows;
+  let max = 0;
+  const existing = await db.vehicles.toArray();
+  for (const v of existing) max = Math.max(max, Number(v.id) || 0);
+  for (const row of missing) {
+    max += 1;
+    row.id = max;
+  }
+  return rows;
+}
+
+// One-time lift of the pre-Dexie storage.local `items` array into IndexedDB.
+// Legacy entries are flat automation items, so they round-trip through the
+// inverse mapper. Storage is cleared whether or not anything was imported so
+// the old key stops mattering.
+async function migrateLegacyItems() {
+  const { items } = await browser.storage.local.get(['items']);
+  if (Array.isArray(items) && items.length) {
+    try {
+      const rows = items.map(toDealerCoreVehicle).filter(Boolean);
+      if (rows.length) {
+        await db.vehicles.bulkPut(await assignMissingIds(rows));
+      }
+    } catch (error) {
+      console.error('[fb-automator] Legacy items migration failed:', error);
+    }
+  }
+  await browser.storage.local.remove(['items']);
+}
 
 export default defineBackground(() => {
   if (browser.sidePanel) {
     browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => { });
   }
+  migrateLegacyItems();
 
   browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     (async () => {
@@ -23,69 +61,91 @@ export default defineBackground(() => {
         sendResponse({ status: 'navigating' });
         return;
       }
-      if (request.action === 'TRIGGER_MARKETPLACE_SYNC' && request.vehicle) {
-        // Belt-and-suspenders: bridge content script already appended to
-        // storage, but a direct message (or a missed write) lands here too.
-        const mapped = fromDealerCoreVehicle(request.vehicle);
-        if (mapped) {
-          const stored = await browser.storage.local.get(['items']);
-          const base = Array.isArray(stored.items) ? stored.items : [];
-          const exists = mapped.dealerCoreId != null &&
-            base.some((it) => it.dealerCoreId === mapped.dealerCoreId);
-          if (!exists) {
-            await browser.storage.local.set({ items: appendVehicles(base, [mapped]) });
-          }
-        }
-        sendResponse({ status: 'queued' });
-        return;
-      }
       if (request.action === 'DEALERCORE_LOGOUT') {
         await clearDealerCoreSession();
         sendResponse({ status: 'logged-out' });
         return;
       }
 
-
-      //  single vehicles all at once
-      if(request.type == 'SYNC_VEHICLES') {
-        db.vehicles
-          .bulkPut(request.payload)
-          .then(
-            (lastResultKey) => {
-              sendResponse({
-                success: true,
-                count: request.payload.length,
-                lastKey: lastResultKey
-              })
+      // Dexie: bulk-insert all vehicles from a full §5 API sync.
+      if (request.type === 'SYNC_VEHICLES') {
+        try {
+          const before = new Map(
+            (await db.vehicles.toArray()).map((v) => [v.id, v]),
+          );
+          const rows = await assignMissingIds(request.payload);
+          await db.vehicles.bulkPut(rows);
+          const after = new Map(
+            (await db.vehicles.toArray()).map((v) => [v.id, v]),
+          );
+          let added = 0;
+          let updated = 0;
+          for (const [id, v] of after) {
+            if (!before.has(id)) added += 1;
+            else if (JSON.stringify(before.get(id)) !== JSON.stringify(v)) {
+              updated += 1;
             }
-          )
-          .catch((error) => {
-            console.error(`Failed to sync vehicles to indexed db: ${error}`)
-            sendResponse({success: false, error: String(error)});
-          })
+          }
+          sendResponse({ success: true, count: rows.length, added, updated });
+        } catch (error) {
+          console.error(`Failed to sync vehicles to indexed db: ${error}`);
+          sendResponse({ success: false, error: String(error) });
+        }
+        return;
       }
 
-      // save or update a single vehicle
-      if(request.type === 'SAVE_SINGLE_VEHICLE') {
-        db.vehicles
-          .put(request.payload)
-          .then((id) => {
-            sendResponse({ success: true, id});
-          })
-          .catch((error) => {
-            console.log(`Failed to SAVE_SINGLE_VEHICLE for: ${error}`);
-            sendResponse({success: false, error: String(error)});
-          })
+      // Dexie: upsert a single vehicle.
+      if (request.type === 'SAVE_SINGLE_VEHICLE') {
+        try {
+          const [row] = await assignMissingIds([request.payload]);
+          const id = await db.vehicles.put(row);
+          sendResponse({ success: true, id });
+        } catch (error) {
+          console.error(`Failed to SAVE_SINGLE_VEHICLE for: ${error}`);
+          sendResponse({ success: false, error: String(error) });
+        }
+        return;
       }
 
-      // clear all vehicles from indexed db
-      if(request.type === 'CLEAR_VEHICLES') {
-        db.vehicles
-          .clear()
-          .then(() => sendResponse({success: true}))
-          .catch((error) => sendResponse({success: false}));
-      }      
+      // Dexie: apply a partial patch (e.g. facebook post_id after publishing).
+      if (request.type === 'UPDATE_VEHICLES') {
+        try {
+          const modified = await db.vehicles
+            .where('id')
+            .equals(request.payload.id)
+            .modify(request.payload);
+          sendResponse({ success: true, modified });
+        } catch (error) {
+          console.error(`Failed to UPDATE_VEHICLES for: ${error}`);
+          sendResponse({ success: false, error: String(error) });
+        }
+        return;
+      }
 
+      // Dexie: read the whole vehicle list (used by content scripts and the
+      // sidepanel; extension-origin contexts may also query `db` directly).
+      if (request.type === 'GET_VEHICLES') {
+        try {
+          const vehicles = await db.vehicles.toArray();
+          sendResponse({ success: true, vehicles });
+        } catch (error) {
+          console.error(`Failed to read vehicles: ${error}`);
+          sendResponse({ success: false, error: String(error) });
+        }
+        return;
+      }
+
+      // Dexie: wipe the local vehicle mirror.
+      if (request.type === 'CLEAR_VEHICLES') {
+        try {
+          await db.vehicles.clear();
+          sendResponse({ success: true });
+        } catch (error) {
+          console.error(`Failed to clear vehicles: ${error}`);
+          sendResponse({ success: false });
+        }
+        return;
+      }
 
       sendResponse({ status: 'ignored' });
     })();
