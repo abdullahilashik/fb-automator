@@ -1,15 +1,8 @@
-import React, { useState, useRef } from "react";
-import { ArrowLeft } from "lucide-react";
-import Header from "../_components/Header";
+import React, { useState, useRef, useEffect } from "react";
+import { ArrowLeft, X, FileText } from "lucide-react";
+import { DEALERCORE_CONFIG } from "../../../utils/dealercore-config";
 
-const BugPage = ({
-  theme,
-  onThemeChange,
-  auth,
-  onOpenAuth,
-  onLogout,
-  onBack,
-}) => {
+const BugPage = ({ onBack, auth }) => {
   const fileInputRef = useRef(null);
 
   // Form state
@@ -19,25 +12,66 @@ const BugPage = ({
     message: "",
     issue_date: "",
   });
-  const [attachments, setAttachments] = useState([]);
+  const [attachments, setAttachments] = useState([]); // Array of File objects
+  const [previews, setPreviews] = useState([]); // Array of { file, previewUrl, isImage }
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState(null); // 'success' | 'error' | null
 
+  // Generate previews when attachments change
+  useEffect(() => {
+    const newPreviews = attachments.map((file) => {
+      const isImage = file.type.startsWith("image/");
+      const previewUrl = isImage ? URL.createObjectURL(file) : null;
+      return { file, previewUrl, isImage };
+    });
+
+    setPreviews(newPreviews);
+
+    // Cleanup object URLs to avoid memory leaks
+    return () => {
+      newPreviews.forEach((item) => {
+        if (item.previewUrl) {
+          URL.revokeObjectURL(item.previewUrl);
+        }
+      });
+    };
+  }, [attachments]);
+
+  // Field change handler
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+  };
+
+  // Append new files without duplicates
+  const handleFilesAdded = (newFiles) => {
+    const fileArray = Array.from(newFiles);
+    setAttachments((prev) => {
+      const existingNames = new Set(prev.map((f) => f.name + f.size));
+      const filteredNew = fileArray.filter(
+        (f) => !existingNames.has(f.name + f.size)
+      );
+      return [...prev, ...filteredNew];
+    });
   };
 
   const handleFileChange = (e) => {
-    if (e.target.files) {
-      setAttachments(Array.from(e.target.files));
+    if (e.target.files && e.target.files.length > 0) {
+      handleFilesAdded(e.target.files);
+      // Reset input value so re-selecting the same file triggers onChange
+      e.target.value = "";
     }
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      setAttachments(Array.from(e.dataTransfer.files));
+      handleFilesAdded(e.dataTransfer.files);
       e.dataTransfer.clearData();
     }
   };
@@ -46,22 +80,87 @@ const BugPage = ({
     e.preventDefault();
   };
 
+  // Remove a specific file from attachments
+  const handleRemoveFile = (indexToRemove, e) => {
+    e.stopPropagation(); // Stop click from triggering the file input dialog
+    setAttachments((prev) => prev.filter((_, index) => index !== indexToRemove));
+  };
+
+  // Validation logic
+  const validate = () => {
+    const newErrors = {};
+
+    if (!formData.category) {
+      newErrors.category = "Please select a complaint category.";
+    }
+    if (!formData.urgency) {
+      newErrors.urgency = "Please select an urgency level.";
+    }
+    if (!formData.message.trim()) {
+      newErrors.message = "Please describe the issue in detail.";
+    } else if (formData.message.trim().length < 10) {
+      newErrors.message = "Description should be at least 10 characters.";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitStatus(null);
+
+    if (!validate()) {
+      return;
+    }
+
     setLoading(true);
 
-    // Add submit/API logic here
-    console.log("Submitted Data:", formData, attachments);
+    try {
+      const payload = new FormData();
+      payload.append("type", "report_issue");
+      payload.append("category", formData.category);
+      payload.append("urgency", formData.urgency);
+      payload.append("message", formData.message);
+      payload.append("issue_date", formData.issue_date || "");
+      payload.append("user_id", auth?.user?.id || "79");
 
-    setTimeout(() => {
+      // Append files
+      attachments.forEach((file) => {
+        payload.append("attachments[]", file);
+      });
+
+      const response = await fetch(`${DEALERCORE_CONFIG.DEFAULT_DOMAIN}/api/admin/ask`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${auth?.token || "YOUR_BEARER_TOKEN"}`,
+        },
+        body: payload,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned status ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log("Response:", result);
+
+      setSubmitStatus("success");
+      setFormData({ category: "", urgency: "", message: "", issue_date: "" });
+      setAttachments([]);
+    } catch (err) {
+      console.error("Submission error:", err);
+      setSubmitStatus("error");
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   return (
-    <>    
-      <div className="h-full w-full bg-white dark:bg-gray-900 flex flex-col overflow-hidden">
-      {/* Header section (kept intact) */}
+    <div className="h-full w-full bg-white dark:bg-gray-900 flex flex-col overflow-hidden text-gray-900 dark:text-gray-100">
+      {/* Header section */}
       <div className="flex items-center gap-2 px-3 py-3 border-b border-gray-100 dark:border-gray-800 shrink-0">
         <button
           onClick={onBack}
@@ -70,28 +169,39 @@ const BugPage = ({
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <h1 className="text-sm font-bold text-gray-900 dark:text-gray-100">
-          Report a Bug
-        </h1>
+        <h1 className="text-sm font-bold">Report a Bug</h1>
       </div>
 
       {/* Main Content Form */}
       <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6">
         <div className="px-4 py-6 sm:py-8 sm:px-8">
-          
+          {submitStatus === "success" && (
+            <div className="mb-4 p-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-800 rounded-lg text-sm">
+              Your issue report has been submitted successfully!
+            </div>
+          )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {submitStatus === "error" && (
+            <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-800 rounded-lg text-sm">
+              Failed to submit report. Please check your connection and try again.
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {/* Category Select */}
-            <div className="space-y-3">
+            <div className="space-y-2">
               <label className="inline-flex font-semibold text-sm capitalize items-center gap-1">
                 Complaint category <span className="text-red-600/80">*</span>
               </label>
               <select
                 name="category"
-                required
                 value={formData.category}
                 onChange={handleChange}
-                className="shadow border !mt-3 w-full px-3 py-2 rounded cursor-pointer"
+                className={`shadow border ${
+                  errors.category
+                    ? "border-red-500"
+                    : "border-gray-300 dark:border-gray-700"
+                } bg-white dark:bg-gray-800 w-full px-3 py-2 rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500`}
               >
                 <option value="">
                   e.g., System bug, Data issue, Compliance issue...
@@ -105,21 +215,24 @@ const BugPage = ({
                 <option value="Other">Other</option>
               </select>
               {errors.category && (
-                <div className="text-red-500 text-sm">{errors.category}</div>
+                <div className="text-red-500 text-xs mt-1">{errors.category}</div>
               )}
             </div>
 
             {/* Urgency Level Select */}
-            <div className="space-y-3">
+            <div className="space-y-2">
               <label className="inline-flex font-semibold text-sm capitalize items-center gap-1">
                 Urgency level <span className="text-red-600/80">*</span>
               </label>
               <select
                 name="urgency"
-                required
                 value={formData.urgency}
                 onChange={handleChange}
-                className="shadow border !mt-3 w-full px-3 py-2 rounded cursor-pointer"
+                className={`shadow border ${
+                  errors.urgency
+                    ? "border-red-500"
+                    : "border-gray-300 dark:border-gray-700"
+                } bg-white dark:bg-gray-800 w-full px-3 py-2 rounded cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500`}
               >
                 <option value="">e.g., Low, Medium, High, Critical...</option>
                 <option value="Low">Low</option>
@@ -128,79 +241,75 @@ const BugPage = ({
                 <option value="Critical">Critical</option>
               </select>
               {errors.urgency && (
-                <div className="text-red-500 text-sm">{errors.urgency}</div>
+                <div className="text-red-500 text-xs mt-1">{errors.urgency}</div>
               )}
             </div>
 
             {/* Message Description */}
-            <div className="word_count relative space-y-3">
+            <div className="word_count relative space-y-2">
               <label className="inline-flex font-semibold text-sm capitalize items-center gap-1">
-                Describe the complaint{" "}
-                <span className="text-red-600/80">*</span>
+                Describe the complaint <span className="text-red-600/80">*</span>
               </label>
               <textarea
                 name="message"
                 maxLength={1000}
-                required
                 rows={4}
                 value={formData.message}
                 onChange={handleChange}
                 placeholder="Please provide detailed information, steps to reproduce, and any error messages..."
-                className="rounded shadow border cursor-pointer !mt-3 min-h-30 resize-none w-full p-3"
+                className={`rounded shadow border ${
+                  errors.message
+                    ? "border-red-500"
+                    : "border-gray-300 dark:border-gray-700"
+                } bg-white dark:bg-gray-800 min-h-[120px] resize-none w-full p-3 focus:outline-none focus:ring-2 focus:ring-sky-500`}
               ></textarea>
-              <div className="absolute bottom-4 right-4 text-base text-secondaryDark">
-                <span className="limit">{formData.message.length}</span>/1000
+              <div className="absolute bottom-4 right-4 text-xs text-gray-400 pointer-events-none">
+                <span>{formData.message.length}</span>/1000
               </div>
               {errors.message && (
-                <div className="text-red-500 text-sm">{errors.message}</div>
+                <div className="text-red-500 text-xs mt-1">{errors.message}</div>
               )}
             </div>
 
             {/* Date Input */}
-            <div className="space-y-3">
-              <label className="inline-flex font-semibold text-sm capitalize items-center gap-1">When did this occur</label>
-              <div className="relative">
-                <input
-                  type="date"
-                  id="when_occur"
-                  name="issue_date"
-                  value={formData.issue_date}
-                  onChange={handleChange}
-                  className="shadow !mt-3 p-3 border w-full"
-                />
-                {/* <div className="absolute h-fit inset-y-0 top-1/2 right-4 flex items-center pointer-events-none text-gray-400">
-                  <svg
-                    width="15"
-                    height="16"
-                    viewBox="0 0 15 16"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M0 14.5C0 15.3281 0.684182 16 1.52748 16H12.729C13.5723 16 14.2564 15.3281 14.2564 14.5V6H0V14.5ZM10.1832 8.375C10.1832 8.16875 10.355 8 10.565 8H11.8379C12.048 8 12.2198 8.16875 12.2198 8.375V9.625C12.2198 9.83125 12.048 10 11.8379 10H10.565C10.355 10 10.1832 9.83125 10.1832 9.625V8.375ZM10.1832 12.375C10.1832 12.1687 10.355 12 10.565 12H11.8379C12.048 12 12.2198 12.1687 12.2198 12.375V13.625C12.2198 13.8313 12.048 14 11.8379 14H10.565C10.355 14 10.1832 13.8313 10.1832 13.625V12.375ZM6.1099 8.375C6.1099 8.16875 6.28174 8 6.49177 8H7.76467C7.97469 8 8.14653 8.16875 8.14653 8.375V9.625C8.14653 9.83125 7.97469 10 7.76467 10H6.49177C6.28174 10 6.1099 9.83125 6.1099 9.625V8.375ZM6.1099 12.375C6.1099 12.1687 6.28174 12 6.49177 12H7.76467C7.97469 12 8.14653 12.1687 8.14653 12.375V13.625C8.14653 13.8313 7.97469 14 7.76467 14H6.49177C6.28174 14 6.1099 13.8313 6.1099 13.625V12.375ZM2.03663 8.375C2.03663 8.16875 2.20847 8 2.4185 8H3.6914C3.90143 8 4.07327 8.16875 4.07327 8.375V9.625C4.07327 9.83125 3.90143 10 3.6914 10H2.4185C2.20847 10 2.03663 9.83125 2.03663 9.625V8.375ZM2.03663 12.375C2.03663 12.1687 2.20847 12 2.4185 12H3.6914C3.90143 12 4.07327 12.1687 4.07327 12.375V13.625C4.07327 13.8313 3.90143 14 3.6914 14H2.4185C2.20847 14 2.03663 13.8313 2.03663 13.625V12.375ZM12.729 2H11.2015V0.5C11.2015 0.225 10.9724 0 10.6923 0H9.67401C9.39397 0 9.16485 0.225 9.16485 0.5V2H5.09158V0.5C5.09158 0.225 4.86246 0 4.58243 0H3.56411C3.28407 0 3.05495 0.225 3.05495 0.5V2H1.52748C0.684182 2 0 2.67188 0 3.5V5H14.2564V3.5C14.2564 2.67188 13.5723 2 12.729 2Z"
-                      fill="#A1A1A1"
-                    ></path>
-                  </svg>
-                </div> */}
-              </div>
+            <div className="space-y-2">
+              <label
+                htmlFor="when_occur"
+                className="inline-flex font-semibold text-sm capitalize items-center gap-1"
+              >
+                When did this occur
+              </label>
+              <input
+                type="date"
+                id="when_occur"
+                name="issue_date"
+                value={formData.issue_date}
+                onChange={handleChange}
+                className="shadow p-3 border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 rounded w-full focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
             </div>
 
-            {/* Attachment Dropzone */}
-            <div className="space-y-3">
-              <label className="inline-flex font-semibold text-sm capitalize items-center gap-1">Attachments</label>
+            {/* Attachment Dropzone & Previews */}
+            <div className="space-y-2">
+              <label className="inline-flex font-semibold text-sm capitalize items-center gap-1">
+                Attachments
+              </label>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                multiple
+                accept="image/*,.pdf"
+                onChange={handleFileChange}
+              />
+
               <div
                 onClick={() => fileInputRef.current?.click()}
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
-                className="shadow min-h-30 h-auto border border-dashed border-fourGrey rounded-xl p-4 hover:border-secondaryDark bg-white/50 dark:bg-gray-800/50 flex flex-col items-center justify-center cursor-pointer transition-colors"
+                className="shadow min-h-[120px] h-auto border border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-4 hover:border-gray-500 dark:hover:border-gray-400 bg-white/50 dark:bg-gray-800/50 flex flex-col items-center justify-center cursor-pointer transition-colors"
               >
-                {attachments.length > 0 && (
-                  <ul className="mb-2 text-xs text-gray-600 dark:text-gray-300">
-                    {attachments.map((file, i) => (
-                      <li key={i}>{file.name}</li>
-                    ))}
-                  </ul>
-                )}
                 <div className="upload_placeholder flex items-center gap-3 pointer-events-none">
                   <svg
                     width="48"
@@ -230,35 +339,65 @@ const BugPage = ({
                       strokeLinecap="round"
                       strokeLinejoin="round"
                     ></path>
-                    <path
-                      d="M32 32L24 24L16 32"
-                      stroke="#878787"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    ></path>
                   </svg>
                   <div className="space-y-2">
-                    <p className="text-base text-primaryText dark:text-gray-200 font-medium">
+                    <p className="text-base text-gray-800 dark:text-gray-200 font-medium">
                       Drag &amp; drop files or{" "}
-                      <span className="text-primaryLight underline">
-                        Browse
-                      </span>
+                      <span className="text-sky-500 underline">Browse</span>
                     </p>
-                    <p className="text-xs text-secondaryText dark:text-gray-400 tracking-tight">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 tracking-tight">
                       PDF, JPG, PNG | Max 25MB each
                     </p>
                   </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="hidden"
-                    multiple
-                    accept="image/*,.pdf"
-                    onChange={handleFileChange}
-                  />
                 </div>
               </div>
+
+              {/* Attachment Previews Grid */}
+              {previews.length > 0 && (
+                <div className="grid grid-cols-4 sm:grid-cols-4 gap-3 mt-3">
+                  {previews.map((item, index) => (
+                    <div
+                      key={index}
+                      className="relative group border border-gray-200 dark:border-gray-700 rounded-lg p-2 bg-gray-50 dark:bg-gray-800/80 flex flex-col items-center justify-between h-28 text-center"
+                    >
+                      {/* Delete Button */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleRemoveFile(index, e)}
+                        className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow transition-transform transform hover:scale-110 z-10"
+                        title="Remove attachment"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Image or File Icon Preview */}
+                      <div className="flex-1 flex items-center justify-center overflow-hidden w-full max-h-16 my-1">
+                        {item.isImage ? (
+                          <img
+                            src={item.previewUrl}
+                            alt={item.file.name}
+                            className="max-h-full max-w-full object-contain rounded"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center text-gray-500 dark:text-gray-400">
+                            <FileText className="w-8 h-8 stroke-1" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* File Name & Size */}
+                      <div className="w-full">
+                        {/* <p className="text-[11px] font-medium text-gray-700 dark:text-gray-300 truncate w-full px-1">
+                          {item.file.name}
+                        </p> */}
+                        <p className="text-[10px] text-gray-400">
+                          {(item.file.size / (1024 * 1024)).toFixed(2)} MB
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -304,7 +443,6 @@ const BugPage = ({
         </div>
       </div>
     </div>
-    </>
   );
 };
 
