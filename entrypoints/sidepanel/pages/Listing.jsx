@@ -243,7 +243,7 @@ const Listing = ({
             ) : (
               <XCircle className="w-4 h-4" />
             )}
-            {cancelling ? "Cancelling…" : "Cancel publishing"}
+            {cancelling ? "Cancelling…" : "Cancel"}
           </button>
         ) : (
           <button
@@ -257,7 +257,8 @@ const Listing = ({
         )}
         <button
           onClick={onSaveDraft}
-          className="text-sm w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-semibold py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+          disabled={selectedCount === 0}
+          className="text-sm w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-semibold py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all disabled:opacity-40"
         >
           Save as draft
         </button>

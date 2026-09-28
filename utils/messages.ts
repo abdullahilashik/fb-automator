@@ -19,4 +19,5 @@ export type ExtensionMessage =
   | { type: "SAVE_SINGLE_VEHICLE"; payload: Vehicle }
   | { type: "UPDATE_VEHICLES"; payload: Partial<Vehicle> }
   | { type: "GET_VEHICLES" }
-  | { type: "CLEAR_VEHICLES" };
+  | { type: "CLEAR_VEHICLES" }
+  | { type: "FETCH_IMAGE"; url: string }; // CORS-bypassing image download (host permission per origin)

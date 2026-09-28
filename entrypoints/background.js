@@ -147,6 +147,43 @@ export default defineBackground(() => {
         return;
       }
 
+      // Image download for the photo upload step. Content scripts are subject
+      // to the page's CORS policy, so public S3 buckets that omit
+      // Access-Control-Allow-Origin break the plain fetch in handlePhotos().
+      // The background can bypass that once it holds host permission for the
+      // image origin (requested on demand via optional_host_permissions).
+      if (request.type === 'FETCH_IMAGE') {
+        const fetchBytes = async (url) => {
+          const resp = await fetch(url, { credentials: 'omit' });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          return {
+            bytes: await resp.arrayBuffer(),
+            contentType: resp.headers.get('content-type') || 'image/jpeg',
+          };
+        };
+        try {
+          const { bytes, contentType } = await fetchBytes(request.url);
+          sendResponse({ success: true, bytes, contentType });
+        } catch (firstError) {
+          try {
+            const origin = new URL(request.url).origin;
+            const granted = await browser.permissions.request({
+              origins: [`${origin}/*`],
+            });
+            if (!granted) throw firstError;
+            const { bytes, contentType } = await fetchBytes(request.url);
+            sendResponse({ success: true, bytes, contentType });
+          } catch (secondError) {
+            console.error(`Image fetch failed (background): ${secondError}`);
+            sendResponse({
+              success: false,
+              error: String(secondError?.message || secondError),
+            });
+          }
+        }
+        return;
+      }
+
       sendResponse({ status: 'ignored' });
     })();
     // keep the message line open for async sendResponse

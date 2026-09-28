@@ -379,7 +379,7 @@ const Sidepanel = () => {
 
   const selectedCount = vehicles.filter((v) => selectedIds.has(v.id)).length;
 
-  const startAutomation = async () => {
+  const startAutomation = async (mode = "publish") => {
     const selectedItems = items.filter((it) => selectedIds.has(it.id));
     if (!selectedItems.length) {
       toast.error("Select at least one vehicle");
@@ -392,8 +392,13 @@ const Sidepanel = () => {
       runQueueIds: selectedItems.map((it) => it.id),
       currentIndex: 0,
       results: [],
-      // Fresh run clears any previous cancel request.
-      automation_state: { phase: "running", cancelRequested: false },
+      // Fresh run clears any previous cancel request; `mode` decides whether
+      // the automation clicks Publish or Save draft on the Facebook page.
+      automation_state: {
+        phase: "running",
+        cancelRequested: false,
+        mode,
+      },
     });
     setCancelling(false);
 
@@ -425,7 +430,11 @@ const Sidepanel = () => {
       browser.tabs.update(tab.id, { url: TARGET_URL });
     }
 
-    toast.success(`Publishing ${selectedItems.length} vehicle(s)`);
+    toast.success(
+      mode === "draft"
+        ? `Saving ${selectedItems.length} draft(s)`
+        : `Publishing ${selectedItems.length} vehicle(s)`,
+    );
   };
 
   const cancelAutomation = async () => {
@@ -478,16 +487,7 @@ const Sidepanel = () => {
   };
 
   const saveDraft = async () => {
-    const selectedItems = items.filter((it) => selectedIds.has(it.id));
-    if (!selectedItems.length) {
-      toast.error("Select at least one vehicle");
-      return;
-    }
-    await browser.storage.local.set({
-      draftItems: selectedItems,
-      draftSavedAt: Date.now(),
-    });
-    toast.success("Draft saved");
+    await startAutomation("draft");
   };
 
   // The landing page owns its own progress state, so there is no separate

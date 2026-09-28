@@ -188,10 +188,43 @@ async function reportSync(item, status, message) {
     }
 }
 
+// FB renders "Save draft" as a div (not a role=button). In draft mode the
+// automation clicks it instead of Publish; write-back records the listing id
+// exactly like a publish.
+const SAVE_DRAFT_SELECTOR = 'div[aria-label="Save Draft"]';
+
+async function clickSaveDraft() {
+    console.log('Waiting for Save Draft button...');
+    for (let i = 0; i < 50; i++) { // Max 25 seconds
+        throwIfCancelled();
+        const button = document.querySelector(SAVE_DRAFT_SELECTOR);
+        if (button) {
+            const clickTarget = button.closest('[role="button"]') || button;
+            const isDisabled =
+                button.getAttribute('aria-disabled') === 'true' ||
+                clickTarget.getAttribute('aria-disabled') === 'true';
+            if (!isDisabled) {
+                console.log('Save Draft button found and enabled, clicking...');
+                clickTarget.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+                clickTarget.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                clickTarget.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                return true;
+            }
+        }
+        await sleep(500);
+    }
+    console.log('Save Draft button not found or not enabled.');
+    return false;
+}
+
 async function runAutomation(itemsToProcess, startIndex, results) {
     let currentIndex = startIndex || 0;
     let currentResults = results || [];
-    await setPhase('running');
+    // 'publish' posts the listing; 'draft' stops at the Save draft button and
+    // never hits Publish.
+    const { automation_state } = await browser.storage.local.get(['automation_state']);
+    const runMode = automation_state?.mode === 'draft' ? 'draft' : 'publish';
+    await setPhase('running', { mode: runMode });
 
     for (let i = currentIndex; i < itemsToProcess.length; i++) {
         // 1. Ensure we are on the creation page before starting each item
@@ -215,9 +248,12 @@ async function runAutomation(itemsToProcess, startIndex, results) {
             if (await clickButton('Next')) {
                 throwIfCancelled();
                 await sleep(2000);
-                if (await clickButton('Publish')) {
-                    console.log(`Item ${item.id} published successfully.`);
-                    currentResults.push({ id: item.id, status: "Success" });
+                const saved = runMode === 'draft'
+                    ? await clickSaveDraft()
+                    : await clickButton('Publish');
+                if (saved) {
+                    console.log(`Item ${item.id} ${runMode === 'draft' ? 'draft saved' : 'published'}.`);
+                    currentResults.push({ id: item.id, status: runMode === 'draft' ? "Draft" : "Success" });
                     // Wait for redirect to finish before moving to next item
                     await sleep(8000);
                     // UPDATE_POLICY: 're-publish' — every run (post or update)
@@ -229,7 +265,11 @@ async function runAutomation(itemsToProcess, startIndex, results) {
                     item._lastPostUrl = post_url;
                     await reportSync(item, item.dealerCoreStatus === 'update' ? 'updated' : 'created');
                 } else {
-                    throw new Error("Publish button not found/enabled");
+                    throw new Error(
+                        runMode === 'draft'
+                            ? "Save draft button not found/enabled"
+                            : "Publish button not found/enabled",
+                    );
                 }
             } else {
                 throw new Error("Next button not found/enabled");

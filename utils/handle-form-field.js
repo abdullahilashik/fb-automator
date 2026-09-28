@@ -1,6 +1,7 @@
 import { findLabelByText } from "./find-label-by";
 import { typeLikeHuman } from "./input-simulation";
 import { sleep } from "./sleep";
+import { browser } from "wxt/browser";
 
 // Handle Facebook's custom Dropdowns
 export const handleDropdown = async (labelName, optionText, shouldAbort) => {
@@ -163,13 +164,8 @@ export const handlePhotos = async (urls, shouldAbort) => {
     for (const url of urls) {
         if (shouldAbort?.()) return;
         try {
-            const resp = await fetch(url, {
-                method: 'GET',
-                mode: 'no-cors'
-            });
-            const blob = await resp.blob();
-            const file = new File([blob], "image.jpg", { type: "image/jpeg" });
-            dataTransfer.items.add(file);
+            const file = await fetchImageAsFile(url, shouldAbort);
+            if (file) dataTransfer.items.add(file);
         } catch (e) {
             console.error("Image fetch failed", e);
         }
@@ -178,3 +174,29 @@ export const handlePhotos = async (urls, shouldAbort) => {
     fileInput.files = dataTransfer.files;
     fileInput.dispatchEvent(new Event('change', { bubbles: true }));
 };
+
+// Download one image and convert it to a File for the upload input.
+// A plain CORS fetch works when the bucket sends Access-Control-Allow-Origin.
+// `mode: 'no-cors'` can never work here — it yields an "opaque" response whose
+// body cannot be read. When CORS blocks the plain fetch, the bytes are fetched
+// through the extension background, which can request a host permission for the
+// image origin once and then read the response regardless of the bucket's
+// CORS config.
+async function fetchImageAsFile(url, shouldAbort) {
+    try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        return new File([blob], 'image.jpg', { type: blob.type || 'image/jpeg' });
+    } catch (contentError) {
+        if (shouldAbort?.()) return null;
+    }
+    const res = await browser.runtime.sendMessage({ type: 'FETCH_IMAGE', url });
+    if (!res?.success || !res.bytes) {
+        throw new Error(res?.error || 'image fetch failed via background');
+    }
+    const name = url.split('/').pop() || 'image.jpg';
+    return new File([new Uint8Array(res.bytes)], name, {
+        type: res.contentType || 'image/jpeg',
+    });
+}
