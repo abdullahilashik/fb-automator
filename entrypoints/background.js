@@ -147,6 +147,42 @@ export default defineBackground(() => {
         return;
       }
 
+      // Dexie: persist the outcome of a §6 write-back so the sidepanel can
+      // identify per-vehicle sync state ('synced' | 'failed'). Nested
+      // facebook + timestamps are merged so unrelated columns survive.
+      if (request.type === 'UPDATE_SYNC_STATUS') {
+        try {
+          const { id, outcome, account_id, post_id, post_url, last_synced_at, message } =
+            request.payload || {};
+          const modified = await db.vehicles.where('id').equals(id).modify((v) => {
+            if (outcome === 'synced') {
+              return {
+                facebook: {
+                  account_id: account_id || v.facebook?.account_id || '',
+                  post_id: post_id || v.facebook?.post_id || '',
+                  post_url: post_url || v.facebook?.post_url || '',
+                },
+                timestamps: {
+                  ...(v.timestamps || {}),
+                  last_synced_at:
+                    last_synced_at ||
+                    v.timestamps?.last_synced_at ||
+                    new Date().toISOString(),
+                },
+                sync_status: 'synced',
+                sync_error: null,
+              };
+            }
+            return { sync_status: 'failed', sync_error: message || null };
+          });
+          sendResponse({ success: true, modified });
+        } catch (error) {
+          console.error(`Failed to UPDATE_SYNC_STATUS for: ${error}`);
+          sendResponse({ success: false, error: String(error) });
+        }
+        return;
+      }
+
       // Image download for the photo upload step. Content scripts are subject
       // to the page's CORS policy, so public S3 buckets that omit
       // Access-Control-Allow-Origin break the plain fetch in handlePhotos().

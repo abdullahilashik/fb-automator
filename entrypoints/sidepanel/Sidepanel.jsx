@@ -379,8 +379,11 @@ const Sidepanel = () => {
 
   const selectedCount = vehicles.filter((v) => selectedIds.has(v.id)).length;
 
-  const startAutomation = async (mode = "publish") => {
-    const selectedItems = items.filter((it) => selectedIds.has(it.id));
+  const startAutomation = async (mode = "publish", idsOverride = null) => {
+    // Retry passes an explicit single-vehicle set; a normal run uses the UI
+    // selection. Either way the queue comes from Dexie's master list.
+    const targetIds = idsOverride instanceof Set ? idsOverride : selectedIds;
+    const selectedItems = items.filter((it) => targetIds.has(it.id));
     if (!selectedItems.length) {
       toast.error("Select at least one vehicle");
       return;
@@ -494,6 +497,14 @@ const Sidepanel = () => {
     await startAutomation("draft");
   };
 
+  // Re-queue a single failed vehicle in publish mode. `startAutomation`
+  // clears the previous run's stored results, so the stale "Failed" entry is
+  // dropped and the fresh outcome replaces it when the run completes.
+  const retryVehicle = async (id) => {
+    if (running || cancelling) return;
+    await startAutomation("publish", new Set([id]));
+  };
+
   // The landing page owns its own progress state, so there is no separate
   // full-screen placeholder here — that would duplicate the in-page spinner.
   if (!isConnected)
@@ -558,6 +569,7 @@ const Sidepanel = () => {
           onCancelAutomation={cancelAutomation}
           cancelling={cancelling}
           onSaveDraft={saveDraft}
+          onRetry={retryVehicle}
         />
       )}
 
