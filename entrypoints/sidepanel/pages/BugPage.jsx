@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { ArrowLeft, X, FileText } from "lucide-react";
-import { DEALERCORE_CONFIG } from "../../../utils/dealercore-config";
+import { getAccessToken, getDealerCoreBaseUrl } from "../../../utils/dealercore-api";
 
 const BugPage = ({ onBack, auth }) => {
   const fileInputRef = useRef(null);
@@ -107,7 +107,7 @@ const BugPage = ({ onBack, auth }) => {
   };
 
   // Form submission
-  const handleSubmit = async (e) => {
+  const handleSubmit_test = async (e) => {
     e.preventDefault();
     setSubmitStatus(null);
 
@@ -131,11 +131,87 @@ const BugPage = ({ onBack, auth }) => {
         payload.append("attachments[]", file);
       });
 
-      const response = await fetch(`${DEALERCORE_CONFIG.DEFAULT_DOMAIN}/api/admin/ask`, {
+      // Resolve the real per-origin session credentials. The UI `auth` object
+      // carries no token in silent-handshake mode, and the active environment
+      // may differ from DEALERCORE_CONFIG.DEFAULT_DOMAIN — raw storage is the
+      // only source that matches what the rest of the extension uses.
+      const base = await getDealerCoreBaseUrl();
+      const { token } = await getAccessToken(base);
+      if (!token) {
+        throw new Error("No DealerCore session. Reconnect and try again.");
+      }
+
+      const response = await fetch(`${base}/api/admin/ask/`, {
         method: "POST",
         headers: {
           Accept: "application/json",
-          Authorization: `Bearer ${auth?.token || "YOUR_BEARER_TOKEN"}`,
+          Authorization: `Bearer ${token}`,
+        },
+        body: payload,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned status ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log("Response:", result);
+
+      setSubmitStatus("success");
+      setFormData({ category: "", urgency: "", message: "", issue_date: "" });
+      setAttachments([]);
+    } catch (err) {
+      console.error("Submission error:", err);
+      setSubmitStatus("error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Form submission
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitStatus(null);
+
+    if (!validate()) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const payload = new FormData();
+      payload.append("type", "report_issue");
+      payload.append("category", formData.category);
+      payload.append("urgency", formData.urgency);
+      payload.append("message", formData.message);
+
+      // Convert "YYYY-MM-DD" to "DD-MM-YYYY" (d-m-Y)
+      if (formData.issue_date && formData.issue_date.trim() !== "") {
+        const [year, month, day] = formData.issue_date.split("-");
+        const formattedDate = `${day}-${month}-${year}`; // Results in "28-09-2026"
+        payload.append("issue_date", formattedDate);
+      }
+
+      payload.append("user_id", auth?.user?.id || "79");
+
+      // Append files
+      attachments.forEach((file) => {
+        payload.append("attachments[]", file);
+      });
+
+      // Resolve the real per-origin session credentials
+      const base = await getDealerCoreBaseUrl();
+      const { token } = await getAccessToken(base);
+      if (!token) {
+        throw new Error("No DealerCore session. Reconnect and try again.");
+      }
+
+      const response = await fetch(`${base}/api/admin/ask/`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: payload,
       });
