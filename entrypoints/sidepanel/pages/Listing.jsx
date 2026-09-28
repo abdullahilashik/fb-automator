@@ -11,12 +11,17 @@ const STATUS_STYLES = {
   error: {
     card: "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950",
     footer: "text-red-700 dark:text-red-400",
-    message: "Required fields couldn't be filled",
+    message: "Failed — click ↻ to retry",
   },
   cancelled: {
     card: "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950",
     footer: "text-amber-700 dark:text-amber-400",
     message: "Cancelled before publishing",
+  },
+  draft: {
+    card: "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950",
+    footer: "text-amber-700 dark:text-amber-400",
+    message: "Saved as draft",
   },
   processing: {
     card: "border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950",
@@ -28,6 +33,15 @@ const STATUS_STYLES = {
     footer: "text-gray-400",
     message: "",
   },
+};
+
+// Sync identification per vehicle: server-derived ('synced' / new 'post' /
+// pending 'update') or the locally-persisted write-back outcome ('failed').
+const BADGE_STYLES = {
+  synced: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  post: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+  update: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  failed: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
 };
 
 const FALLBACK_IMAGE =
@@ -42,6 +56,19 @@ export function buildVehicles(items, results, currentIndex, running) {
     let status = "default";
     let progress = 0;
 
+    // Sync state badge: locally-persisted write-back failure wins over the
+    // server-derived flags; otherwise 'synced' → 'post'/'update' pending.
+    let syncBadge = null;
+    if (item.syncStatus === "failed") {
+      syncBadge = { key: "failed", label: "Sync failed", cls: BADGE_STYLES.failed };
+    } else if (item.dealerCoreSynced) {
+      syncBadge = { key: "synced", label: "Synced", cls: BADGE_STYLES.synced };
+    } else if (item.dealerCoreStatus === "post") {
+      syncBadge = { key: "post", label: "Ready to post", cls: BADGE_STYLES.post };
+    } else if (item.dealerCoreStatus === "update") {
+      syncBadge = { key: "update", label: "Update pending", cls: BADGE_STYLES.update };
+    }
+
     if (res) {
       if (res.status === "Success") {
         status = "success";
@@ -49,6 +76,9 @@ export function buildVehicles(items, results, currentIndex, running) {
       } else if (res.status === "Cancelled") {
         status = "cancelled";
         progress = 0;
+      } else if (res.status === "Draft") {
+        status = "draft";
+        progress = 100;
       } else {
         status = "error";
         progress = 95;
@@ -69,6 +99,8 @@ export function buildVehicles(items, results, currentIndex, running) {
       image: item.imageUrls?.[0],
       status,
       progress,
+      syncBadge,
+      postId: res?.listing_id || null,
     };
   });
 }
@@ -95,6 +127,7 @@ const Listing = ({
   onCancelAutomation,
   cancelling,
   onSaveDraft,
+  onRetry,
 }) => (
   <div className="h-full w-full bg-white dark:bg-gray-900 flex flex-col overflow-hidden shadow-xl">
     <Header
@@ -167,7 +200,12 @@ const Listing = ({
                         <h3 className="text-[12px] font-bold text-gray-900 dark:text-gray-100 truncate">{car.name}</h3>
                         {car.status === "error" && (
                           <button
-                            onClick={(e) => e.stopPropagation()}
+                            title="Retry this vehicle"
+                            aria-label={`Retry ${car.name}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRetry(car.id);
+                            }}
                             className="text-red-400 hover:text-red-600 p-1 bg-white dark:bg-gray-800 rounded-full shadow-sm"
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -176,7 +214,16 @@ const Listing = ({
                           </button>
                         )}
                       </div>
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0">{car.trim}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {car.syncBadge && (
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${car.syncBadge.cls}`}
+                          >
+                            {car.syncBadge.label}
+                          </span>
+                        )}
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0">{car.trim}</p>
+                      </div>
                       <p className="text-[12px] font-bold text-sky-500">{car.price}</p>
                       <p className="text-[10px] text-gray-400 mt-0">
                         {car.km} km • {car.transmission} • {car.fuel}
@@ -199,7 +246,11 @@ const Listing = ({
                             <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                           </svg>
                         )}
-                        <span>{style.message}</span>
+                        <span>
+                          {car.status === "success" && car.postId
+                            ? `Listed · ${car.postId}`
+                            : style.message}
+                        </span>
                       </div>
                       <span>{car.progress}%</span>
                     </div>

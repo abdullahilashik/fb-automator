@@ -343,19 +343,21 @@ const Settings = ({ theme, onThemeChange, auth, onOpenAuth, onLogout, onBack }) 
         </section>
 
         <section>
-          <h2 className="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
-            Report a bug
+          <h2 className="inline-flex text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
+            Report a bug <span className="text-[10px] rounded-full px-2 text-center bg-red-600 text-white ml-4">stall</span>
           </h2>
           <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-3">
             <textarea
               value={bugMessage}
               onChange={(e) => setBugMessage(e.target.value)}
               rows={3}
+              disabled
               placeholder="What went wrong? Include steps to reproduce if possible."
               className="w-full text-[12px] bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 outline-none focus:border-sky-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 resize-none transition-all"
             />
             <button
               onClick={submitBug}
+              disabled
               className="mt-2 w-full flex items-center justify-center gap-1.5 text-[12px] font-bold text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 py-2 rounded-lg transition-all"
             >
               <Bug className="w-3.5 h-3.5" /> Send report

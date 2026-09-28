@@ -240,7 +240,7 @@ async function extractListingIdAfterPublish() {
 async function reportSync(item, status, message) {
     if (item?.dealerCoreId == null) return;
     try {
-        await writeBackSync({
+        const resp = await writeBackSync({
             vehicle_id: item.dealerCoreId,
             status,
             account_id: '',
@@ -248,8 +248,45 @@ async function reportSync(item, status, message) {
             post_url: item._lastPostUrl || '',
             message: message || null,
         });
+        // auth-guide §6: HTTP 200 with `data.status === 'synced'` confirms the
+        // server applied it, and returns the updated vehicle row (facebook ids,
+        // last_synced_at). Persist that outcome so the sidepanel can show it.
+        const synced = resp?.data?.status === 'synced' ? resp?.data?.data : null;
+        if (synced) {
+            const fb = synced.facebook || {};
+            await persistSyncOutcome(item.id, {
+                outcome: 'synced',
+                account_id: fb.account_id || '',
+                post_id: fb.post_id || item._lastPostId || '',
+                post_url: fb.post_url || item._lastPostUrl || '',
+                last_synced_at: synced.timestamps?.last_synced_at || null,
+            });
+            return;
+        }
+        await persistSyncOutcome(item.id, {
+            outcome: 'failed',
+            message: `Write-back not confirmed for ${status}.`,
+        });
     } catch (err) {
         console.warn(`[dealercore] write-back (${status}) failed for vehicle ${item.dealerCoreId}:`, err?.message || err);
+        await persistSyncOutcome(item.id, {
+            outcome: 'failed',
+            message: err?.message || String(err),
+        });
+    }
+}
+
+// Best-effort mirror of the server write-back into the local Dexie worklist.
+// Content scripts can't touch IndexedDB, so this goes through the background.
+// A mirror failure must never break the automation loop.
+async function persistSyncOutcome(id, payload) {
+    try {
+        await browser.runtime.sendMessage({
+            type: 'UPDATE_SYNC_STATUS',
+            payload: { id, ...payload },
+        });
+    } catch (e) {
+        console.warn(`[dealercore] sync-state mirror failed for vehicle ${id}:`, e?.message || e);
     }
 }
 

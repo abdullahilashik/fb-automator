@@ -62,6 +62,10 @@ export interface Vehicle {
   description_templates: IDescriptionTemplate;
   images: string[];
   timestamps: ITimestamps;
+  // Local-only sync bookkeeping written by UPDATE_SYNC_STATUS after a §6
+  // write-back. Not part of the DealerCore API shape.
+  sync_status?: 'synced' | 'failed' | null;
+  sync_error?: string | null;
 }
 
 export const db = new Dexie('VehicleExtensionDB') as Dexie & {

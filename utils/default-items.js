@@ -196,6 +196,14 @@ export function fromDealerCoreVehicle(apiVehicle) {
     dealerCoreId: apiVehicle.id ?? null,
     dealerCoreStatus: apiVehicle.status ?? null, // 'post' | 'update'
     dealerCoreFacebook: apiVehicle.facebook || null,
+    // Local sync bookkeeping (written after a §6 write-back mirror).
+    syncStatus: apiVehicle.sync_status ?? null,
+    syncError: apiVehicle.sync_error ?? null,
+    lastSyncedAt: apiVehicle.timestamps?.last_synced_at ?? null,
+    // A row is "synced" once the server has a facebook post id and a sync stamp.
+    dealerCoreSynced: Boolean(
+      apiVehicle.facebook?.post_id && apiVehicle.timestamps?.last_synced_at,
+    ),
     vehicleType: 'Car/van',
     imageUrls: images.filter((u) => typeof u === 'string' && u.length > 0),
     location: String(location),
@@ -279,5 +287,7 @@ export function toDealerCoreVehicle(flat) {
       vehicle_updated_at: flat.vehicle_updated_at ?? null,
       last_synced_at: flat.last_synced_at ?? null,
     },
+    sync_status: flat.syncStatus ?? flat.sync_status ?? null,
+    sync_error: flat.syncError ?? flat.sync_error ?? null,
   };
 }

@@ -98,6 +98,7 @@
         <li><a href="#automation-publish"  class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Publish</a></li>
         <li><a href="#automation-save-draft" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Save Draft</a></li>
         <li><a href="#automation-writeback" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Write Back API</a></li>
+        <li><a href="#automation-sync-badges" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Sync badges &amp; Retry</a></li>
         <li><a href="#automation-dexie"    class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Indexed DB Database</a></li>
         <li><a href="#unified-login"       class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">The login button</a></li>
         <li><a href="#flow-b"              class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Flow B · Silent handshake</a></li>
@@ -493,6 +494,7 @@
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">SYNC_VEHICLES</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">sidepanel / feed → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Bulk-upsert raw <code class="font-mono">Vehicle[]</code>; assigns ids to synthetic rows and returns <code class="font-mono">added/updated</code> counts. Ids missing from the payload are auto-incremented so a key gap can't fail the write.</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">SAVE_SINGLE_VEHICLE</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">bridge → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Upsert one <code class="font-mono">Vehicle</code> by primary key <code class="font-mono">id</code>.</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">UPDATE_VEHICLES</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">any → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Patch fields (e.g. facebook post id) without replacing the whole record.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">UPDATE_SYNC_STATUS</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">content → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Record a §6 write-back outcome per vehicle: <code class="font-mono">outcome: 'synced'</code> merges the server-returned facebook ids + <code class="font-mono">last_synced_at</code> and sets <code class="font-mono">sync_status</code>; <code class="font-mono">'failed'</code> stores the error message.</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">GET_VEHICLES</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">content / sidepanel → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Read the whole Dexie list. How the facebook.com automation and sidepanel load the worklist (content scripts can't reach extension IndexedDB).</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">CLEAR_VEHICLES</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">sidepanel → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Empty the Dexie vehicle table.</td></tr>
         </tbody>
@@ -574,19 +576,40 @@
     <p>
       <code class="font-mono text-[12px]">post_id</code> <em>is</em> the Facebook listing id recovered at publish
       time — no server-side mapping is needed. A <code class="font-mono text-[12px]">200</code> with
-      <code class="font-mono text-[12px]">data.status === 'synced'</code> confirms the server applied it; anything
-      else is logged against the item id.
+      <code class="font-mono text-[12px]">data.status === 'synced'</code> confirms the server applied it. The outcome is
+      mirrored straight back into the local worklist via <code class="font-mono text-[12px]">UPDATE_SYNC_STATUS</code>:
+      a <em>synced</em> response stores the server-returned <code class="font-mono text-[12px]">facebook</code> ids and
+      <code class="font-mono text-[12px]">timestamps.last_synced_at</code> and sets <code class="font-mono text-[12px]">sync_status: 'synced'</code>;
+      any failure stores <code class="font-mono text-[12px]">sync_status: 'failed'</code> plus the error message. The sidepanel's
+      <a href="#automation-publish">Listing page</a> then identifies each vehicle live via a badge.
+    </p>
+
+    <h3 id="automation-sync-badges" class="anchor">Sync badges &amp; Retry</h3>
+    <p class="fileref">entrypoints/sidepanel/pages/<b>Listing.jsx</b> → <b>buildVehicles()</b> :53 · entrypoints/sidepanel/<b>Sidepanel.jsx</b> → <b>retryVehicle()</b> :503</p>
+    <p>Every vehicle card shows a sync badge derived from the server flags and the write-back outcome:</p>
+    <ul>
+      <li><strong>Synced</strong> — the server row carries <code class="font-mono text-[12px]">facebook.post_id</code> and <code class="font-mono text-[12px]">timestamps.last_synced_at</code>.</li>
+      <li><strong>Ready to post</strong> — server status <code class="font-mono text-[12px]">'post'</code>, not posted yet.</li>
+      <li><strong>Update pending</strong> — server status <code class="font-mono text-[12px]">'update'</code>, modified since last sync.</li>
+      <li><strong>Sync failed</strong> — the §6 write-back was not confirmed (<code class="font-mono text-[12px]">sync_status: 'failed'</code>).</li>
+    </ul>
+    <p>
+      A run that fails while filling the form leaves the card in the red failed state with a <strong>↻ Retry</strong>
+      button. Retry re-queues just that vehicle in publish mode (<code class="font-mono text-[12px]">retryVehicle()</code>
+      → a single-id <code class="font-mono text-[12px]">startAutomation('publish', ids)</code>) and rewrites the stale stored
+      result once the run completes. Sync-failed cards are <em>not</em> offered a re-publish — the listing is already live
+      on Facebook, so retrying would create a duplicate.
     </p>
 
     <h3 id="automation-dexie" class="anchor">Indexed DB Database</h3>
-    <p class="fileref">utils/<b>db.ts</b> → <b>VehicleExtensionDB</b> · utils/<b>default-items.js</b> → <b>fromDealerCoreVehicle()</b> :175 · <b>toDealerCoreVehicle()</b> :226 · entrypoints/<b>background.js</b> handlers :71–:168 · <b>assignMissingIds()</b> :17 · <b>migrateLegacyItems()</b> :34</p>
+    <p class="fileref">utils/<b>db.ts</b> → <b>VehicleExtensionDB</b> · utils/<b>default-items.js</b> → <b>fromDealerCoreVehicle()</b> :175 · <b>toDealerCoreVehicle()</b> :226 · entrypoints/<b>background.js</b> handlers :71–:184 · <b>assignMissingIds()</b> :17 · <b>migrateLegacyItems()</b> :34</p>
     <p>
       The extension keeps its vehicle worklist in an IndexedDB database via <strong>Dexie</strong>:
     </p>
     <ul>
       <li><b>db.vehicles</b> — primary key <code class="font-mono text-[12px]">id</code> (the native API vehicle id); indexed on <code class="font-mono text-[12px]">status</code>, <code class="font-mono text-[12px]">details.make</code>, <code class="font-mono text-[12px]">details.model</code>, <code class="font-mono text-[12px]">details.year</code>, <code class="font-mono text-[12px]">pricing.price</code>, <code class="font-mono text-[12px]">timestamps.vehicle_updated_at</code>.</li>
       <li>The Popup seeds it on open; the sidepanel reads it with <code class="font-mono text-[12px]">useLiveQuery</code>, so rows added while the panel is open appear instantly.</li>
-      <li><strong>Only the background script writes</strong> — via the <code class="font-mono text-[12px]">SYNC_VEHICLES</code>, <code class="font-mono text-[12px]">SAVE_SINGLE_VEHICLE</code>, <code class="font-mono text-[12px]">UPDATE_VEHICLES</code> (field patches, e.g. facebook post id) and <code class="font-mono text-[12px]">CLEAR_VEHICLES</code> messages. <b>assignMissingIds()</b> auto-increments ids for synthetic rows so a key gap can't fail a bulk write; <b>migrateLegacyItems()</b> lifts pre-Dexie storage items once at startup.</li>
+      <li><strong>Only the background script writes</strong> — via the <code class="font-mono text-[12px]">SYNC_VEHICLES</code>, <code class="font-mono text-[12px]">SAVE_SINGLE_VEHICLE</code>, <code class="font-mono text-[12px]">UPDATE_VEHICLES</code> (field patches, e.g. facebook post id), <code class="font-mono text-[12px]">UPDATE_SYNC_STATUS</code> (write-back outcome) and <code class="font-mono text-[12px]">CLEAR_VEHICLES</code> messages. <b>assignMissingIds()</b> auto-increments ids for synthetic rows so a key gap can't fail a bulk write; <b>migrateLegacyItems()</b> lifts pre-Dexie storage items once at startup.</li>
       <li>Content scripts run in the <em>page origin</em> and <strong>cannot reach extension IndexedDB</strong> — the Facebook automation loads its queue through <code class="font-mono text-[12px]">GET_VEHICLES</code> to the background, never by hitting the database directly.</li>
       <li><b>fromDealerCoreVehicle() / toDealerCoreVehicle()</b> map between the raw API <code class="font-mono text-[12px]">Vehicle[]</code> shape and the flattened row the extension stores.</li>
     </ul>
