@@ -107,68 +107,6 @@ const BugPage = ({ onBack, auth }) => {
   };
 
   // Form submission
-  const handleSubmit_test = async (e) => {
-    e.preventDefault();
-    setSubmitStatus(null);
-
-    if (!validate()) {
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const payload = new FormData();
-      payload.append("type", "report_issue");
-      payload.append("category", formData.category);
-      payload.append("urgency", formData.urgency);
-      payload.append("message", formData.message);
-      payload.append("issue_date", formData.issue_date || "");
-      payload.append("user_id", auth?.user?.id || "79");
-
-      // Append files
-      attachments.forEach((file) => {
-        payload.append("attachments[]", file);
-      });
-
-      // Resolve the real per-origin session credentials. The UI `auth` object
-      // carries no token in silent-handshake mode, and the active environment
-      // may differ from DEALERCORE_CONFIG.DEFAULT_DOMAIN — raw storage is the
-      // only source that matches what the rest of the extension uses.
-      const base = await getDealerCoreBaseUrl();
-      const { token } = await getAccessToken(base);
-      if (!token) {
-        throw new Error("No DealerCore session. Reconnect and try again.");
-      }
-
-      const response = await fetch(`${base}/api/admin/ask/`, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: payload,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server returned status ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log("Response:", result);
-
-      setSubmitStatus("success");
-      setFormData({ category: "", urgency: "", message: "", issue_date: "" });
-      setAttachments([]);
-    } catch (err) {
-      console.error("Submission error:", err);
-      setSubmitStatus("error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitStatus(null);
