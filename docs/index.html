@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Authentication · FB Marketplace Automator</title>
+<meta name="description" content="DealerCore authentication architecture, flows and developer guide for the FB Marketplace Automator extension." />
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        },
+        colors: {
+          brand: {
+            50:'#eff8ff',100:'#dbeefe',200:'#bfe2fe',300:'#93d1fd',
+            400:'#60b7fa',500:'#3b99f6',600:'#1f7aee',700:'#1462d4',
+            800:'#1750ab',900:'#194689',950:'#142c56'
+          }
+        }
+      }
+    }
+  }
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  body { -webkit-font-smoothing: antialiased; }
+  /* offset anchors for the sticky header */
+  .anchor { scroll-margin-top: 6rem; }
+  /* thin scrollbars */
+  .nice-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+  .nice-scroll::-webkit-scrollbar-thumb { background: rgb(203 213 225); border-radius: 9999px; }
+  .nice-scroll::-webkit-scrollbar-track { background: transparent; }
+  .dark .nice-scroll::-webkit-scrollbar-thumb { background: rgb(51 65 85); }
+  /* prose-ish defaults */
+  .doc h2 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; margin-top: 3rem; }
+  .doc h3 { font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.01em; margin-top: 2rem; }
+  .doc p  { margin-top: .75rem; line-height: 1.75; }
+  .doc ul { margin-top: .75rem; list-style: disc; padding-left: 1.25rem; }
+  .doc ul li { margin-top: .375rem; line-height: 1.7; }
+  .doc ol { margin-top: .75rem; list-style: decimal; padding-left: 1.25rem; }
+  .doc ol li { margin-top: .5rem; line-height: 1.7; }
+  .doc strong { font-weight: 600; }
+  /* nav active state */
+  .navlink.active { background: rgb(239 246 255); color: rgb(21 94 175); font-weight: 600; }
+  .dark .navlink.active { background: rgb(30 58 138 / .45); color: rgb(147 197 253); }
+  /* file reference line under a heading */
+  .fileref {
+    margin-top: .5rem;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11.5px;
+    line-height: 1.6;
+    color: rgb(100 116 139);
+  }
+  .dark .fileref { color: rgb(148 163 184); }
+  .fileref b { color: rgb(30 64 175); font-weight: 600; }
+  .dark .fileref b { color: rgb(147 197 253); }
+</style>
+</head>
+
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-300 font-sans antialiased">
+
+<!-- ══════════════════ SIDEBAR ══════════════════ -->
+<aside class="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 lg:flex">
+  <div class="flex h-16 shrink-0 items-center gap-2.5 border-b border-slate-200 px-5 dark:border-slate-800">
+    <div class="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 text-sm font-bold text-white">FB</div>
+    <div class="min-w-0">
+      <p class="truncate text-sm font-bold leading-tight text-slate-900 dark:text-white">Marketplace Automator</p>
+      <p class="truncate text-[11px] leading-tight text-slate-500 dark:text-slate-400">Developer documentation</p>
+    </div>
+  </div>
+
+  <nav class="nice-scroll flex-1 overflow-y-auto px-3 py-5 text-sm">
+    <p class="px-2 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Documentation</p>
+
+    <!-- ░░ Single menu for now ░░ -->
+    <div class="mb-1">
+      <div class="flex items-center gap-2 rounded-lg bg-brand-50 px-2.5 py-2 text-brand-800 dark:bg-brand-950/60 dark:text-brand-200">
+        <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+        <span class="font-semibold">Authentication</span>
+      </div>
+
+      <ul class="mt-1 space-y-0.5 border-l-2 border-slate-200 pl-3 ml-3 dark:border-slate-800">
+        <li><a href="#overview"            class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Overview</a></li>
+        <li><a href="#architecture"        class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Architecture</a></li>
+        <li><a href="#source-map"          class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Source map</a></li>
+        <li><a href="#storage"             class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Storage &amp; keys</a></li>
+        <li><a href="#messages"            class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Message contracts</a></li>
+        <li><a href="#unified-login"       class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">The login button</a></li>
+        <li><a href="#flow-b"              class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Flow B · Silent handshake</a></li>
+        <li><a href="#auto-connect"         class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Auto-connect on open</a></li>
+        <li><a href="#flow-a"              class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Flow A · Interactive OAuth</a></li>
+        <li><a href="#lifecycle"           class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Token lifecycle</a></li>
+        <li><a href="#signout"             class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Sign out</a></li>
+        <li><a href="#setup"               class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Developer guide</a></li>
+        <li><a href="#config"              class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Configuration</a></li>
+        <li><a href="#api"                 class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">API surface</a></li>
+        <li><a href="#manifest"            class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Manifest &amp; permissions</a></li>
+        <li><a href="#troubleshooting"     class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Troubleshooting</a></li>
+        <li><a href="#quirks"              class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Server quirks</a></li>
+        <li><a href="#errors"              class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Error decoder</a></li>
+      </ul>
+    </div>
+
+    <p class="px-2 pb-2 pt-5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Coming later</p>
+    <div class="space-y-0.5">
+      <div class="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-slate-400 dark:text-slate-600">
+        <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        <span class="text-[13px]">Vehicle sync</span>
+      </div>
+      <div class="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-slate-400 dark:text-slate-600">
+        <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span class="text-[13px]">Publishing pipeline</span>
+      </div>
+      <div class="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-slate-400 dark:text-slate-600">
+        <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <span class="text-[13px]">Troubleshooting</span>
+      </div>
+    </div>
+  </nav>
+
+  <div class="shrink-0 border-t border-slate-200 p-4 dark:border-slate-800">
+    <div class="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+      <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span></span>
+      Both flows verified working
+    </div>
+  </div>
+</aside>
+
+<!-- ══════════════════ MAIN ══════════════════ -->
+<div class="lg:pl-72">
+
+  <!-- top bar -->
+  <header class="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-slate-200 bg-white/85 px-5 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85 sm:px-8">
+    <div class="min-w-0 flex-1">
+      <div class="flex items-center gap-2 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+        <span>Documentation</span>
+        <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        <span class="text-slate-900 dark:text-white">Authentication</span>
+      </div>
+      <p class="truncate text-sm font-semibold text-slate-900 dark:text-white">DealerCore integration</p>
+    </div>
+    <span class="hidden rounded-full bg-slate-100 px-2.5 py-1 font-mono text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">WXT · MV3</span>
+    <span class="rounded-full bg-brand-100 px-2.5 py-1 text-[11px] font-semibold text-brand-700 dark:bg-brand-900/50 dark:text-brand-300">Chrome</span>
+  </header>
+
+  <main class="doc mx-auto max-w-4xl px-5 py-10 sm:px-8">
+
+    <!-- ───── hero ───── -->
+    <div class="rounded-2xl border border-slate-200 bg-gradient-to-br from-brand-50 to-white p-6 dark:border-slate-800 dark:from-brand-950/40 dark:to-slate-900">
+      <div class="flex items-start gap-4">
+        <div class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-600 text-white shadow-lg shadow-brand-600/20">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Authentication</h1>
+          <p class="mt-1.5 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+            How the extension proves who the user is to DealerCore, obtains a Bearer token,
+            and keeps that token alive — across two independent flows, one user-facing button.
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-5 grid gap-3 sm:grid-cols-3">
+        <div class="rounded-xl border border-emerald-200 bg-white p-3.5 dark:border-emerald-900/60 dark:bg-slate-900">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Primary</p>
+          <p class="mt-1 text-sm font-bold text-slate-900 dark:text-white">Silent handshake</p>
+          <p class="mt-0.5 text-[11px] leading-snug text-slate-500 dark:text-slate-400">Reuses the web session cookie</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3.5 dark:border-slate-800 dark:bg-slate-900">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Fallback</p>
+          <p class="mt-1 text-sm font-bold text-slate-900 dark:text-white">Interactive OAuth</p>
+          <p class="mt-0.5 text-[11px] leading-snug text-slate-500 dark:text-slate-400">Authorization Code + PKCE</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white p-3.5 dark:border-slate-800 dark:bg-slate-900">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Secret in bundle</p>
+          <p class="mt-1 text-sm font-bold text-slate-900 dark:text-white">None</p>
+          <p class="mt-0.5 text-[11px] leading-snug text-slate-500 dark:text-slate-400">Public client, PKCE only</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ───── overview ───── -->
+    <h2 id="overview" class="anchor">Overview</h2>
+    <p class="fileref">Defined in <b>utils/dealercore-config.js</b> · implemented across <b>utils/dealercore-api.js</b> and <b>entrypoints/dealercore-bridge.content.js</b></p>
+    <p>
+      The extension never asks the user for a DealerCore password. Opening the sidepanel is usually
+      enough — it reuses the session the browser already holds. When that is not possible it falls
+      back to a visible OAuth round-trip, and only then does it need a click. Both flows converge on
+      the same end state: a DealerCore <strong>Bearer token</strong> in extension storage, plus a
+      cached session snapshot used purely for rendering the UI.
+    </p>
+
+    <div class="mt-5 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <table class="min-w-full text-left text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-800/60">
+          <tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <th class="px-4 py-2.5 font-semibold">Concern</th>
+            <th class="px-4 py-2.5 font-semibold">Approach</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          <tr><td class="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">Credentials in code</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">No <code class="font-mono text-[12px] text-rose-600 dark:text-rose-400">client_secret</code> is bundled. Public client + PKCE.</td></tr>
+          <tr><td class="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">Consent prompts</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">First-party client in Nova bypasses the approval screen.</td></tr>
+          <tr><td class="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">Multi-environment</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Tokens are keyed per origin, so dev and prod never collide.</td></tr>
+          <tr><td class="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">Token theft via CSRF</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Handshake runs same-origin from a content script, so <code class="font-mono text-[12px]">SameSite</code> cookies are still attached.</td></tr>
+          <tr><td class="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">Page context leakage</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Inbound <code class="font-mono text-[12px]">postMessage</code> is origin- and source-validated.</td></tr>
+          <tr><td class="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">Silent re-auth</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Every DealerCore page load retries the handshake, unless explicitly signed out.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ───── architecture ───── -->
+    <h2 id="architecture" class="anchor">Architecture</h2>
+    <p class="fileref">entrypoints/<b>dealercore-bridge.content.js</b> · entrypoints/<b>background.js</b> · entrypoints/sidepanel/<b>AuthModal.jsx</b> · utils/<b>dealercore-api.js</b></p>
+    <p>Four extension surfaces cooperate. Only the content scripts may talk to DealerCore with cookies.</p>
+
+    <div class="mt-5 grid gap-3 sm:grid-cols-2">
+      <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex items-center gap-2">
+          <span class="rounded bg-violet-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-violet-700 dark:bg-violet-900/50 dark:text-violet-300">content</span>
+          <p class="text-sm font-bold text-slate-900 dark:text-white">dealercore-bridge</p>
+        </div>
+        <p class="mt-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+          Injected on every DealerCore page. Owns the silent handshake, the
+          <code class="font-mono text-[12px]">STOCK_FOR_ADVERTISING</code> listener, and answers
+          <code class="font-mono text-[12px]">DC_RUN_HANDSHAKE</code>. Being same-origin is what
+          makes the cookie flow work.
+        </p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex items-center gap-2">
+          <span class="rounded bg-sky-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-sky-700 dark:bg-sky-900/50 dark:text-sky-300">service</span>
+          <p class="text-sm font-bold text-slate-900 dark:text-white">background</p>
+        </div>
+        <p class="mt-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+          Routes <code class="font-mono text-[12px]">NAVIGATE_TO_CREATE</code>,
+          <code class="font-mono text-[12px]">DEALERCORE_LOGOUT</code> and the Dexie vehicle messages
+          (<code class="font-mono text-[12px]">SYNC_VEHICLES</code>, <code class="font-mono text-[12px]">GET_VEHICLES</code>, …).
+          IndexedDB (<code class="font-mono text-[12px]">utils/db.ts</code>) is the source of truth for the vehicle
+          worklist, and the background is the only process that can write it from
+          content scripts (which run on the <em>page</em> origin and cannot see the
+          extension's IndexedDB). Knows nothing about OAuth.
+        </p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex items-center gap-2">
+          <span class="rounded bg-amber-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">sidepanel</span>
+          <p class="text-sm font-bold text-slate-900 dark:text-white">AuthModal</p>
+        </div>
+        <p class="mt-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+          Renders the single login button and runs the decision chain. Holds no protocol logic
+          of its own — it composes helpers from <code class="font-mono text-[12px]">dealercore-api.js</code>.
+        </p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <div class="flex items-center gap-2">
+          <span class="rounded bg-emerald-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">shared</span>
+          <p class="text-sm font-bold text-slate-900 dark:text-white">dealercore-api.js</p>
+        </div>
+        <p class="mt-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+          The protocol layer: PKCE generation, authorize URL, token exchange, authed fetch
+          wrapper, session validation, sign-out. Every network call to DealerCore lives here.
+        </p>
+      </div>
+    </div>
+
+    <h3 id="source-map" class="anchor">Source map</h3>
+    <p>
+      Every concept in this document maps to a specific file and function. Line numbers refer to the
+      current state of the repository and will drift as code changes — the symbols are the reliable anchor.
+    </p>
+
+    <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <table class="min-w-full text-left text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-800/60">
+          <tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <th class="px-4 py-2.5 font-semibold">File</th>
+            <th class="px-4 py-2.5 font-semibold">Responsibility</th>
+            <th class="px-4 py-2.5 font-semibold">Key symbols</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800 align-top">
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">utils/dealercore-config.js</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Single file to edit per environment.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              DEALERCORE_CONFIG <span class="text-slate-400">:4</span><br />
+              isDealerCoreHostname <span class="text-slate-400">:31</span><br />
+              tokenKeyFor <span class="text-slate-400">:40</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">utils/dealercore-api.js</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Protocol layer. Every DealerCore call except the handshake.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              createPkce <span class="text-slate-400">:65</span><br />
+              buildAuthorizeUrl <span class="text-slate-400">:74</span><br />
+              probeAuthorize <span class="text-slate-400">:107</span><br />
+              explainProbe <span class="text-slate-400">:139</span><br />
+              diagnoseDealercore <span class="text-slate-400">:175</span><br />
+              fetchWithRateLimitRetry <span class="text-slate-400">:221</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              ensureDealerCoreTab <span class="text-slate-400">:240</span><br />
+              bridgeScriptFiles <span class="text-slate-400">:262</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              ensureBridgeInjected <span class="text-slate-400">:282</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              connectViaSession <span class="text-slate-400">:305</span> <span class="text-amber-600 dark:text-amber-400">fallback</span><br />
+              handshakeFromExtension <span class="text-slate-400">:395</span> <span class="text-emerald-600 dark:text-emerald-400">preferred</span><br />
+              tryAutoConnect <span class="text-slate-400">:438</span> <span class="text-emerald-600 dark:text-emerald-400">auto</span><br />
+              persistSessionSnapshot <span class="text-slate-400">:512</span><br />
+              finalizeSession <span class="text-slate-400">:526</span><br />
+              launchOAuthLogin <span class="text-slate-400">:534</span><br />
+              refreshViaRefreshToken <span class="text-slate-400">:596</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              authed <span class="text-slate-400">:641</span><br />
+              fetchVehicles <span class="text-slate-400">:697</span><br />
+              fetchAllVehicles <span class="text-slate-400">:720</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              writeBackSync <span class="text-slate-400">:764</span><br />
+              clearDealerCoreSession <span class="text-slate-400">:773</span><br />
+              verifySession <span class="text-slate-400">:795</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/dealercore-bridge.content.js</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Runs on DealerCore pages. Owns the handshake and the vehicle listener.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              silentHandshake <span class="text-slate-400">:12</span><br />
+              ingestStockEvent <span class="text-slate-400">:69</span><br />
+              429 guard <span class="text-slate-400">:32</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              double-inject guard <span class="text-slate-400">:100</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              matches <span class="text-slate-400">:88</span><br />
+              auto-handshake <span class="text-slate-400">:106</span><br />
+              origin guard <span class="text-slate-400">:111</span><br />
+              DC_RUN_HANDSHAKE <span class="text-slate-400">:126</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/sidepanel/pages/NotConnected.jsx</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Landing page. Renders one of three states from a single <code class="font-mono text-[11.5px]">status</code> prop.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              NotConnected <span class="text-slate-400">:14</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              connecting state <span class="text-slate-400">:47</span><br />
+              error state <span class="text-slate-400">:80</span><br />
+              idle / connect offer <span class="text-slate-400">:105</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/sidepanel/Sidepanel.jsx</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Owns the connection state machine and routes between landing page, listing and settings.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              connectStatus state <span class="text-slate-400">:98</span><br />
+              applySession <span class="text-slate-400">:104</span><br />
+              auto-connect effect <span class="text-slate-400">:116</span> <span class="text-emerald-600 dark:text-emerald-400">auto</span><br />
+              syncFromDealerCore <span class="text-slate-400">:156</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              handleRefresh <span class="text-slate-400">:184</span> <span class="text-emerald-600 dark:text-emerald-400">new</span><br />
+              handleConnect <span class="text-slate-400">:293</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/sidepanel/AuthModal.jsx</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Login UI and the handshake→OAuth decision chain. Unchanged by auto-connect.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              runOAuthFlow <span class="text-slate-400">:46</span><br />
+              handleLogin <span class="text-slate-400">:65</span><br />
+              handleTestFlowA <span class="text-slate-400">:108</span> <span class="text-amber-600 dark:text-amber-400">temp</span><br />
+              handleOpenInTab <span class="text-slate-400">:122</span><br />
+              handleDiagnose <span class="text-slate-400">:133</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/sidepanel/pages/Settings.jsx</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Connection state, session verification, sign-out button.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              verifySession call <span class="text-slate-400">:94</span><br />
+              onLogout <span class="text-slate-400">:302</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/sidepanel/Sidepanel.jsx</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Reads the worklist live from Dexie via <code class="font-mono">useLiveQuery</code>; orchestrates selection, sync, publish and cancel.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">
+              useLiveQuery <span class="text-slate-400">:52</span><br />
+              items derivation <span class="text-slate-400">:54</span><br />
+              loadData <span class="text-slate-400">:86</span><br />
+              auto-connect effect <span class="text-slate-400">:145</span><br />
+              syncFromDealerCore <span class="text-slate-400">:204</span><br />
+              handleRefresh <span class="text-slate-400">:240</span><br />
+              handleLogout <span class="text-slate-400">:347</span><br />
+              startAutomation <span class="text-slate-400">:382</span><br />
+              cancelAutomation <span class="text-slate-400">:431</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">entrypoints/background.js</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Message router. Deliberately knows nothing about OAuth.</td>
+            <td class="px-4 py-3 font-mono text-slate-500 dark:text-slate-400">
+              listener <span class="text-slate-400">:55</span><br />
+              migrateLegacyItems <span class="text-slate-400">:34</span><br />
+              NAVIGATE_TO_CREATE <span class="text-slate-400">:57</span><br />
+              DEALERCORE_LOGOUT <span class="text-slate-400">:64</span><br />
+              SYNC_VEHICLES <span class="text-slate-400">:71</span><br />
+              SAVE_SINGLE_VEHICLE <span class="text-slate-400">:98</span><br />
+              UPDATE_VEHICLES <span class="text-slate-400">:111</span><br />
+              GET_VEHICLES <span class="text-slate-400">:127</span><br />
+              CLEAR_VEHICLES <span class="text-slate-400">:139</span><br />
+              FETCH_IMAGE <span class="text-slate-400">:155</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">wxt.config.ts</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Manifest: permissions and host patterns.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">permissions <span class="text-slate-400">:11</span> · host_permissions <span class="text-slate-400">:12</span> · optional_host_permissions <span class="text-slate-400">:19</span></td>
+          </tr>
+          <tr>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">auth-guide.md</td>
+            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Upstream DealerCore spec. <strong class="text-amber-600 dark:text-amber-400">Known inaccurate</strong> on PKCE and scope.</td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">Flow A <span class="text-slate-400">:145</span> · Flow B <span class="text-slate-400">:190</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-4 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <p class="text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        <strong>Reading order for a newcomer:</strong> <code class="font-mono text-[12px]">dealercore-config.js</code> →
+        <code class="font-mono text-[12px]">AuthModal.jsx</code> to see the user journey →
+        <code class="font-mono text-[12px]">dealercore-bridge.content.js</code> for Flow B →
+        <code class="font-mono text-[12px]">dealercore-api.js</code> for Flow A and the shared helpers.
+      </p>
+    </div>
+
+    <h3 id="storage" class="anchor">Storage keys</h3>
+    <p>
+      Auth state lives in <code class="font-mono text-[13px]">browser.storage.local</code>; the token is
+      the single source of truth for <em>authentication</em> — the UI never keeps its own copy.
+      The <strong>vehicle worklist</strong> lives in an IndexedDB table via <b>Dexie</b>
+      (<code class="font-mono text-[13px]">utils/db.ts</code>, DB <code class="font-mono text-[13px]">VehicleExtensionDB</code>,
+      table <code class="font-mono text-[13px]">vehicles</code>) so it can be filtered/sorted by nested indexed
+      fields and stays live for the sidepanel via <code class="font-mono text-[13px]">useLiveQuery()</code>.
+      Only the background writes that table; content scripts — which run on the <em>page</em> origin —
+      reach it through the messages below. A one-time migration lifts any legacy
+      <code class="font-mono text-[13px]">storage.local.items</code> into Dexie on startup and deletes the old key.
+    </p>
+
+    <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <table class="min-w-full text-left text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-800/60">
+          <tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <th class="px-4 py-2.5 font-semibold">Key</th>
+            <th class="px-4 py-2.5 font-semibold">Purpose</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800 font-mono text-[12.5px]">
+          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">token_&lt;origin&gt;</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">The Bearer token, one entry per environment (<code class="font-mono text-[12px]">token_https://dev.dealercore.com.au</code>).</td></tr>
+          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">refresh_&lt;origin&gt;</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Optional OAuth refresh token, per environment. Rotated on every successful refresh; cleared on sign-out.</td></tr>
+          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">runQueueIds</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">The per-run selection (vehicle primary keys). The only run-queue state stored outside Dexie; replaces the old <code class="font-mono text-[12px]">items</code> payload. Cleared on cancel/complete.</td></tr>
+          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">dealercore_base_url</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Active origin. Re-derived from the active tab when that tab is a DealerCore page.</td></tr>
+          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">dealercore_session</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Cached <code class="font-mono text-[12px]">user / dealer / branch / branches / savedAt</code>. UI convenience only — never used to authorise a request.</td></tr>
+          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">dealercore_signed_out</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Boolean latch. Blocks the automatic handshake after an explicit sign-out.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3.5 text-[13px] leading-relaxed text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+      <strong>Why per-origin tokens?</strong> A single <code class="font-mono">token</code> key would let a dev token
+      silently authorise requests against production. Keying by origin makes that class of bug impossible.
+    </div>
+
+    <h3 id="messages" class="anchor">Message contracts</h3>
+    <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <table class="min-w-full text-left text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-800/60">
+          <tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <th class="px-4 py-2.5 font-semibold">Message</th>
+            <th class="px-4 py-2.5 font-semibold">Transport</th>
+            <th class="px-4 py-2.5 font-semibold">Purpose</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">DC_RUN_HANDSHAKE</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">runtime → content</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Sidepanel forces a handshake; bypasses the sign-out latch.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">DEALERCORE_SESSION_READY</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">content → runtime</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Advisory ping so the UI can refresh. Safe to fail silently.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">STOCK_FOR_ADVERTISING</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">page → content (<code class="font-mono">postMessage</code>)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Vehicle payload from the DealerCore app. Requires <code class="font-mono">source: 'DEALERCORE_FB_EXTENSION'</code>.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">DEALERCORE_LOGOUT</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">sidepanel → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Broadcast sign-out so every surface drops its copy.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">SYNC_VEHICLES</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">sidepanel / feed → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Bulk-upsert raw <code class="font-mono">Vehicle[]</code>; assigns ids to synthetic rows and returns <code class="font-mono">added/updated</code> counts. Ids missing from the payload are auto-incremented so a key gap can't fail the write.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">SAVE_SINGLE_VEHICLE</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">bridge → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Upsert one <code class="font-mono">Vehicle</code> by primary key <code class="font-mono">id</code>.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">UPDATE_VEHICLES</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">any → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Patch fields (e.g. facebook post id) without replacing the whole record.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">GET_VEHICLES</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">content / sidepanel → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Read the whole Dexie list. How the facebook.com automation and sidepanel load the worklist (content scripts can't reach extension IndexedDB).</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">CLEAR_VEHICLES</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">sidepanel → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Empty the Dexie vehicle table.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ───── unified login ───── -->
+    <h2 id="unified-login" class="anchor">The login button</h2>
+    <p class="fileref">entrypoints/sidepanel/<b>AuthModal.jsx</b> → <b>handleLogin()</b> :65 · <b>runOAuthFlow()</b> :46 · <b>handleTestFlowA()</b> :108</p>
+    <p>
+      There are two connect buttons, and the distinction matters. The landing page's
+      <strong>Connect with DealerCore</strong> is the primary path: it skips straight to Flow A
+      because <a href="#auto-connect" class="text-brand-600 underline dark:text-brand-400">auto-connect</a>
+      has already tried the silent handshake and come up empty. The chain below lives in the
+      <b>AuthModal</b>, reachable from the avatar menu, and is what you get if you want the
+      extension to choose. Choosing a strategy is the extension's job, not the user's.
+    </p>
+
+    <div class="mt-5 space-y-2.5">
+      <div class="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/30">
+        <span class="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-600 text-[11px] font-bold text-white">1</span>
+        <div>
+          <p class="text-sm font-semibold text-slate-900 dark:text-white">Try the silent handshake</p>
+          <p class="mt-0.5 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+            <code class="font-mono text-[12px]">connectViaSession()</code> — ensures a DealerCore tab exists,
+            pings it for a handshake, and validates the result. Usually instant.
+          </p>
+        </div>
+      </div>
+      <div class="ml-6 h-4 border-l-2 border-dashed border-slate-300 dark:border-slate-700"></div>
+      <div class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <span class="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-slate-400 text-[11px] font-bold text-white">2</span>
+        <div>
+          <p class="text-sm font-semibold text-slate-900 dark:text-white">Fall back to interactive OAuth</p>
+          <p class="mt-0.5 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+            <code class="font-mono text-[12px]">runOAuthFlow()</code> — only reached if step 1 throws. Opens the
+            DealerCore login page and exchanges the returned code.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+      <p class="text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        Both steps call the same <code class="font-mono text-[12px]">finish()</code> helper, so they are
+        indistinguishable to the rest of the app — the UI only ever sees "connected".
+        A handshake failure is logged to the console and surfaced as a neutral toast; it is never
+        shown as an error, because it is an expected, handled transition.
+      </p>
+    </div>
+
+    <div class="mt-4 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Temporary</p>
+      <p class="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        A second button, <code class="font-mono text-[12px]">TEMP — Test Flow A</code>, invokes
+        <code class="font-mono text-[12px]">runOAuthFlow()</code> directly. It exists to exercise OAuth in
+        isolation while the handshake keeps succeeding and short-circuiting the fallback.
+        Remove it once Flow A is confirmed in CI or staging.
+      </p>
+    </div>
+
+    <!-- ───── flow B ───── -->
+    <h2 id="flow-b" class="anchor">Flow B · Silent handshake</h2>
+    <p class="fileref">entrypoints/<b>dealercore-bridge.content.js</b> → <b>silentHandshake()</b> :12 · driven by utils/<b>dealercore-api.js</b> → <b>connectViaSession()</b> :243</p>
+    <p class="text-[15px]">
+      <span class="rounded-md bg-emerald-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">Default path</span>
+    </p>
+    <p>
+      The browser already holds a valid <code class="font-mono text-[13px]">laravel_session</code> cookie for
+      DealerCore. The handshake trades that cookie for a scoped API token — no UI, no typing.
+    </p>
+
+    <div class="mt-5 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <div class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 dark:border-slate-800 dark:bg-slate-800/60">
+        <p class="font-mono text-[12px] font-semibold text-slate-700 dark:text-slate-300">entrypoints/dealercore-bridge.content.js</p>
+      </div>
+      <pre class="nice-scroll overflow-x-auto bg-slate-900 p-4 font-mono text-[12.5px] leading-relaxed text-slate-100"><code><span class="text-slate-400">// Fired on every DealerCore page load — never blocks rendering.</span>
+<span class="text-slate-400">silentHandshake(baseUrl);</span>
+
+<span class="text-sky-300">const</span> res = <span class="text-sky-300">await</span> <span class="text-amber-300">fetch</span>(<span class="text-emerald-300">`${baseUrl}/api/v1/auth/handshake`</span>, {
+  method: <span class="text-emerald-300">'POST'</span>,
+  credentials: <span class="text-emerald-300">'include'</span>,   <span class="text-slate-500">// ← carries the session cookie</span>
+  headers: { <span class="text-emerald-300">'Content-Type'</span>: <span class="text-emerald-300">'application/json'</span> },
+  body: <span class="text-amber-300">JSON</span>.stringify(payload),   <span class="text-slate-500">// {} by default</span>
+});</code></pre>
+    </div>
+
+    <h3>Why a content script and not the sidepanel</h3>
+    <p>
+      A <code class="font-mono text-[13px]">fetch()</code> issued from the extension's own page is
+      cross-site. The session cookie is <code class="font-mono text-[13px]">SameSite=Lax</code>, so the
+      browser withholds it and the endpoint answers <code class="font-mono text-[13px]">401</code>.
+      Running the identical request from a content script on a DealerCore page makes it
+      <strong>same-origin</strong>, the cookie is attached, and it succeeds.
+    </p>
+    <p>
+      This is the single most important constraint in the whole integration, and it is why the
+      handshake is not implemented in <code class="font-mono text-[13px]">dealercore-api.js</code> despite
+      living alongside the other network helpers.
+    </p>
+
+    <h3>Triggering it on demand</h3>
+    <p>
+      A content script may not be injected yet when the user clicks, so
+      <code class="font-mono text-[13px]">connectViaSession()</code> retries five times at 800&nbsp;ms.
+      If the tab reloaded mid-flight and the reply was lost, it falls back to checking storage
+      directly before declaring failure.
+    </p>
+
+    <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <pre class="nice-scroll overflow-x-auto bg-slate-900 p-4 font-mono text-[12.5px] leading-relaxed text-slate-100"><code><span class="text-sky-300">for</span> (<span class="text-sky-300">let</span> attempt = <span class="text-amber-300">0</span>; attempt &lt; <span class="text-amber-300">5</span>; attempt++) {
+  <span class="text-sky-300">try</span> {
+    result = <span class="text-sky-300">await</span> browser.tabs.<span class="text-amber-300">sendMessage</span>(tabId, { action: <span class="text-emerald-300">'DC_RUN_HANDSHAKE'</span> });
+  } <span class="text-sky-300">catch</span> { result = <span class="text-sky-300">null</span>; }   <span class="text-slate-500">// no receiver yet</span>
+  <span class="text-sky-300">if</span> (result?.ok) <span class="text-sky-300">break</span>;
+  <span class="text-sky-300">if</span> (result?.unauthenticated) <span class="text-sky-300">throw new</span> <span class="text-rose-300">Error</span>(<span class="text-emerald-300">'…log in to the main app, not /nova'</span>);
+  <span class="text-sky-300">await</span> <span class="text-amber-300">sleep</span>(<span class="text-amber-300">800</span>);
+}</code></pre>
+    </div>
+
+    <div class="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3.5 text-[13px] leading-relaxed text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+      <strong>Do not send <code class="font-mono">client_id</code> yet.</strong> The endpoint validates it as a
+      first-party client and rejects the handshake until that flag is set. That couples the working
+      default path to an unrelated server flag, so it is omitted by default. Flip
+      <code class="font-mono">HANDSHAKE_SEND_CLIENT_ID</code> to <code class="font-mono">true</code> once the
+      client is confirmed first-party.
+    </div>
+
+    <!-- ───── flow A ───── -->
+    <h3 id="auto-connect" class="anchor">Auto-connect on open</h3>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>tryAutoConnect()</b> :438 · <b>handshakeFromExtension()</b> :395 · <b>connectViaSession()</b> :305 · <b>ensureBridgeInjected()</b> :282 — entrypoints/sidepanel/<b>Sidepanel.jsx</b> :141</p>
+    <p>
+      Opening the sidepanel attempts the handshake on its own. In the common case the user never
+      touches a login button — the panel is simply already connected. There is no prerequisite tab
+      to open first, and nothing is ever shown on screen.
+    </p>
+
+    <p>Three strategies are tried in order, cheapest first:</p>
+    <ol>
+      <li>
+        <strong>Reuse the stored token.</strong> Revalidated against
+        <code class="font-mono text-[13px]">/api/v1/auth/me</code>, so a stale token can never read
+        as a live session. A dead one falls through. Reported as
+        <code class="font-mono text-[13px]">via: 'existing-token'</code>.
+      </li>
+      <li>
+        <strong>Ask the server directly.</strong> <code class="font-mono text-[13px]">handshakeFromExtension()</code>
+        posts to <code class="font-mono text-[13px]">/api/v1/auth/handshake</code> from the extension
+        page itself with <code class="font-mono text-[13px]">credentials: 'include'</code>. No tab is
+        borrowed, no content script is injected, no message round-trip. Reported as
+        <code class="font-mono text-[13px]">via: 'direct'</code>.
+      </li>
+      <li>
+        <strong>Borrow an open DealerCore tab.</strong> <code class="font-mono text-[13px]">connectViaSession()</code>
+        drives the content-script bridge, injecting it first if the tab predates the extension load.
+        Same-origin, so it still works if CORS is ever tightened server-side. Reported as
+        <code class="font-mono text-[13px]">via: 'handshake'</code>.
+      </li>
+    </ol>
+
+    <p>It still refuses two things, because an automatic action that can interrupt someone is worse than one extra click:</p>
+    <ul>
+      <li><strong>It never falls back to OAuth.</strong> Auto-connect is handshake-only. A login window with no user action behind it is intrusive, so failure simply leaves the connect button visible.</li>
+      <li><strong>It honours sign-out.</strong> If <code class="font-mono text-[13px]">dealercore_signed_out</code> is set, auto-connect returns immediately — signing out actually sticks.</li>
+    </ul>
+
+    <div class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/30">
+      <p class="text-[13px] font-semibold text-emerald-900 dark:text-emerald-300">Why the direct call is allowed at all</p>
+      <p class="mt-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        The bridge content script originally existed because a cross-site POST from an extension page
+        would be dropped by SameSite rules. That is no longer the binding constraint. DealerCore
+        answers credentialed cross-origin requests from the extension origin — verified against the
+        running server, which echoes the origin with
+        <code class="font-mono text-[12px]">Access-Control-Allow-Credentials: true</code> on both
+        <code class="font-mono text-[12px]">/api/v1/auth/handshake</code> (preflight
+        <code class="font-mono text-[12px]">204</code>) and
+        <code class="font-mono text-[12px]">/api/v1/auth/me</code> (which allows the
+        <code class="font-mono text-[12px]">authorization</code> header). So Chrome attaches the
+        existing session cookie and the exchange completes with no page involved.
+      </p>
+      <p class="mt-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        <code class="font-mono text-[12px]">credentials: 'include'</code> is not optional here: omit
+        it and Chrome strips the session cookie, producing a bare
+        <code class="font-mono text-[12px]">401</code> that looks identical to being signed out.
+        Strategy 3 is kept as a safety net precisely because this depends on server configuration
+        rather than on the extension alone.
+      </p>
+    </div>
+
+    <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/30">
+      <p class="text-[13px] font-semibold text-amber-900 dark:text-amber-300">A bug that made this silently not work</p>
+      <p class="mt-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        Before the direct path existed, the only route was the content-script bridge — and the bridge
+        is <em>statically declared</em>, so Chrome only injects it into pages loaded
+        <strong>after</strong> the extension. Any DealerCore tab that was already open — the norm
+        right after a reload, an update, or a fresh
+        <code class="font-mono text-[12px]">chrome://extensions</code> load — had no listener, so
+        <code class="font-mono text-[12px]">sendMessage</code> threw and the handshake had nowhere to
+        run. The symptom was a four-second spinner followed by the connect button, with no error to
+        explain it. Auto-connect looked implemented but was not.
+      </p>
+      <p class="mt-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        <code class="font-mono text-[12px]">ensureBridgeInjected()</code> fixes the fallback path by
+        injecting the bundle on demand via <code class="font-mono text-[12px]">scripting.executeScript()</code>
+        on the first "no receiver" response, then retrying after 150&nbsp;ms — 151&nbsp;ms to connect
+        instead of four seconds and a failure. The script path is read
+        from the manifest rather than hardcoded, and the bridge guards itself with a
+        <code class="font-mono text-[12px]">window.__DC_BRIDGE_READY__</code> sentinel so injecting
+        into an already-wired tab cannot double-register its listeners. When injection is genuinely
+        refused — a restricted page, or a missing host permission — the loop gives up after one
+        retry instead of spinning.
+      </p>
+    </div>
+
+    <p>
+      A stored token short-circuits the handshake, but it is revalidated against
+      <code class="font-mono text-[13px]">/api/v1/auth/me</code> first, so a stale token can never be
+      mistaken for a live session. A dead token falls through to a fresh handshake.
+    </p>
+
+    <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <pre class="nice-scroll overflow-x-auto bg-slate-900 p-4 font-mono text-[12.5px] leading-relaxed text-slate-100"><code><span class="text-sky-300">export async function</span> <span class="text-amber-300">tryAutoConnect</span>() {
+  <span class="text-sky-300">try</span> {
+    <span class="text-sky-300">const</span> { dealercore_signed_out: signedOut } = <span class="text-sky-300">await</span> browser.storage.local.<span class="text-amber-300">get</span>([<span class="text-emerald-300">'dealercore_signed_out'</span>]);
+    <span class="text-sky-300">if</span> (signedOut) <span class="text-sky-300">return</span> { ok: <span class="text-amber-300">false</span>, reason: <span class="text-emerald-300">'Signed out.'</span> };
+
+    <span class="text-sky-300">const</span> base = <span class="text-sky-300">await</span> <span class="text-amber-300">getDealerCoreBaseUrl</span>();
+    <span class="text-sky-300">const</span> { token } = <span class="text-sky-300">await</span> <span class="text-amber-300">getAccessToken</span>(base);
+    <span class="text-sky-300">if</span> (token) {
+        <span class="text-sky-300">try</span> { <span class="text-slate-500">// revalidate — a stale token is not a session</span>
+        <span class="text-sky-300">const</span> me = <span class="text-sky-300">await</span> <span class="text-amber-300">fetchMe</span>(base, token);
+        <span class="text-sky-300">await</span> <span class="text-amber-300">persistSessionSnapshot</span>(base, me);
+        <span class="text-sky-300">return</span> { ok: <span class="text-amber-300">true</span>, base, me, via: <span class="text-emerald-300">'existing-token'</span> };
+      } <span class="text-sky-300">catch</span> {} <span class="text-slate-500">// dead token → handshake below</span>
+    }
+
+    <span class="text-slate-500">// Preferred: no tab, no content script, no message round-trip.</span>
+    <span class="text-sky-300">try</span> {
+      <span class="text-sky-300">const</span> { me } = <span class="text-sky-300">await</span> <span class="text-amber-300">handshakeFromExtension</span>(base);
+      <span class="text-sky-300">return</span> { ok: <span class="text-amber-300">true</span>, base, me, via: <span class="text-emerald-300">'direct'</span> };
+    } <span class="text-sky-300">catch</span> (directError) {
+      <span class="text-slate-500">// Same-origin fallback: borrow an open DealerCore tab.</span>
+      <span class="text-sky-300">try</span> {
+        <span class="text-sky-300">const</span> { base: usedBase, me } = <span class="text-sky-300">await</span> <span class="text-amber-300">connectViaSession</span>({
+          openTabIfMissing: <span class="text-amber-300">false</span>,
+          focus: <span class="text-amber-300">false</span>,
+        });
+        <span class="text-sky-300">return</span> { ok: <span class="text-amber-300">true</span>, base: usedBase, me, via: <span class="text-emerald-300">'handshake'</span> };
+      } <span class="text-sky-300">catch</span> {
+        <span class="text-sky-300">return</span> { ok: <span class="text-amber-300">false</span>, reason: directError?.message };
+      }
+    }
+  } <span class="text-sky-300">catch</span> (e) {
+    <span class="text-sky-300">return</span> { ok: <span class="text-amber-300">false</span>, reason: e?.message || <span class="text-amber-300">String</span>(e) };
+  }
+}</code></pre>
+    </div>
+
+    <div class="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/40">
+      <p class="text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        The landing page renders exactly one of three states from a single
+        <code class="font-mono text-[12px]">status</code> value, so there is no
+        separate "connecting" screen that could flash and vanish. It never throws,
+        so a failure can only ever move the page to <em>idle</em>.
+      </p>
+      <ul class="mt-3 space-y-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        <li>
+          <span class="font-semibold text-slate-800 dark:text-slate-200">connecting</span> —
+          set on open, and again for the duration of any connect attempt. Shows a spinner,
+          an indeterminate progress bar and the current phase as subtext.
+        </li>
+        <li>
+          <span class="font-semibold text-slate-800 dark:text-slate-200">idle</span> —
+          the silent attempt found nothing to work with. Offers
+          <em>Connect with DealerCore</em>. This is deliberately
+          <strong>not</strong> an error state: having no DealerCore tab open is normal on a
+          cold browser, and showing a red error for it would be alarming and wrong.
+        </li>
+        <li>
+          <span class="font-semibold text-slate-800 dark:text-slate-200">error</span> —
+          reserved for a real Flow A failure. Shows the server's actual message and a
+          <em>Try again</em> button.
+        </li>
+      </ul>
+      <p class="mt-3 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+        Pressing <em>Connect with DealerCore</em> goes
+        <strong>straight to Flow A</strong> — it does not repeat the handshake, since
+        auto-connect has already had its chance. The error text is rendered
+        <code class="font-mono text-[12px]">pre-wrap</code> so the multi-line
+        <code class="font-mono text-[12px]">explainProbe()</code> output stays readable.
+        The <b>AuthModal</b> is a separate, unchanged entry point reachable from the
+        avatar menu.
+      </p>
+    </div>
+
+    <h2 id="flow-a" class="anchor">Flow A · Interactive OAuth</h2>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>createPkce()</b> :65 · <b>buildAuthorizeUrl()</b> :74 · <b>launchOAuthLogin()</b> :363 · surfaced by <b>explainProbe()</b> :139</p>
+    <p class="text-[15px]">
+      <span class="rounded-md bg-slate-200 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-700 dark:bg-slate-700 dark:text-slate-200">Fallback path</span>
+    </p>
+    <p>
+      Standard OAuth 2.0 Authorization Code grant with PKCE, opened through
+      <code class="font-mono text-[13px]">chrome.identity.launchWebAuthFlow()</code>. Used when the user has
+      no live DealerCore tab, or has deliberately signed out.
+    </p>
+
+    <h3>Step 1 — generate a PKCE pair</h3>
+    <p>
+      64 random bytes become the <code class="font-mono text-[13px]">verifier</code>; its SHA-256 digest is the
+      <code class="font-mono text-[13px]">challenge</code>. The verifier never leaves memory and is never stored.
+    </p>
+
+    <h3>Step 2 — build the authorize URL</h3>
+    <div class="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <pre class="nice-scroll overflow-x-auto bg-slate-900 p-4 font-mono text-[12.5px] leading-relaxed text-slate-100"><code>GET {BASE}/oauth/authorize
+  ?client_id=<span class="text-amber-300">9a5c8e32-2d14-41b9-8390-1c5c0a377755</span>
+  &amp;redirect_uri=https://&lt;runtime-extension-id&gt;.chromiumapp.org/
+  &amp;response_type=code
+  &amp;code_challenge=&lt;base64url(SHA256(verifier))&gt;
+  &amp;code_challenge_method=S256</code></pre>
+    </div>
+    <p class="text-[13px]">
+      The redirect URI is derived at runtime from <code class="font-mono">browser.runtime.id</code>, so it always
+      matches the installed extension rather than a hard-coded value.
+    </p>
+
+    <div class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3.5 text-[13px] leading-relaxed text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
+      <strong>PKCE is mandatory on this server.</strong> Omitting
+      <code class="font-mono">code_challenge</code> returns
+      <code class="font-mono">400 invalid_request</code>. Note that the upstream
+      <code class="font-mono">auth-guide.md</code> documents this URL <em>without</em> PKCE and with an empty
+      <code class="font-mono">scope=</code> — following it literally fails even with a correctly
+      registered client. <code class="font-mono">scope</code> is also omitted, because an empty value can be
+      parsed as a scope literally named <code class="font-mono">""</code>.
+    </div>
+
+    <h3>Step 3 — pre-flight, then open the flow</h3>
+    <p>
+      Chrome collapses every failure into <em>"Authorization page could not be loaded."</em>, which hides the
+      real cause. So the extension probes the same URL first with
+      <code class="font-mono text-[13px]">redirect: 'manual'</code> and surfaces the genuine status instead of
+      letting Chrome swallow it.
+    </p>
+    <ul>
+      <li><code class="font-mono text-[12px]">302 → /login</code> — healthy. The server wants the user to sign in.</li>
+      <li><code class="font-mono text-[12px]">401</code> + <code class="font-mono text-[12px]">invalid_client</code> — client unknown, revoked, or not first-party.</li>
+      <li><code class="font-mono text-[12px]">400</code> + <code class="font-mono text-[12px]">invalid_request</code> — a parameter is missing or malformed (usually PKCE).</li>
+    </ul>
+
+    <h3>Step 4 — exchange the code</h3>
+    <div class="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <div class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 dark:border-slate-800 dark:bg-slate-800/60">
+        <p class="font-mono text-[12px] font-semibold text-slate-700 dark:text-slate-300">POST {BASE}/oauth/token</p>
+      </div>
+      <pre class="nice-scroll overflow-x-auto bg-slate-900 p-4 font-mono text-[12.5px] leading-relaxed text-slate-100"><code>{
+  <span class="text-sky-300">"grant_type"</span>: <span class="text-emerald-300">"authorization_code"</span>,
+  <span class="text-sky-300">"client_id"</span>: <span class="text-emerald-300">"9a5c8e32-2d14-41b9-8390-1c5c0a377755"</span>,
+  <span class="text-sky-300">"redirect_uri"</span>: <span class="text-emerald-300">"https://&lt;id&gt;.chromiumapp.org/"</span>,
+  <span class="text-sky-300">"code"</span>: <span class="text-emerald-300">"&lt;authorization code&gt;"</span>,
+  <span class="text-sky-300">"code_verifier"</span>: <span class="text-emerald-300">"&lt;in-memory verifier&gt;"</span>
+}</code></pre>
+    </div>
+    <p class="text-[13px]">
+      No <code class="font-mono">client_secret</code> is sent — the client is public, and the PKCE verifier
+      is the sole proof of possession.
+    </p>
+
+    <h3>Step 5 — confirm identity</h3>
+    <p>
+      <code class="font-mono text-[13px]">fetchMe()</code> calls <code class="font-mono text-[13px]">/api/v1/auth/me</code> with
+      the fresh token. A successful call is the real proof of validity; the code exchange alone is not
+      trusted.
+    </p>
+
+    <!-- ───── lifecycle ───── -->
+    <h2 id="lifecycle" class="anchor">Token lifecycle</h2>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>authed()</b> :641 · <b>refreshViaRefreshToken()</b> :596 · <b>getAccessToken()</b> :36 · <b>verifySession()</b> :795</p>
+    <p>Every authenticated call funnels through one wrapper, so a dead token can never leak into the UI as a stale success.</p>
+
+    <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <pre class="nice-scroll overflow-x-auto bg-slate-900 p-4 font-mono text-[12.5px] leading-relaxed text-slate-100"><code><span class="text-sky-300">async function</span> <span class="text-amber-300">authed</span>(base, token, path, options = {}) {
+  <span class="text-sky-300">const</span> url = <span class="text-emerald-300">`${base}${path}`</span>;
+  <span class="text-sky-300">const</span> send = (bearer) =&gt; ({ ...options, headers: {
+    Accept: <span class="text-emerald-300">'application/json'</span>,
+    <span class="text-emerald-300">'Content-Type'</span>: <span class="text-emerald-300">'application/json'</span>,
+    Authorization: <span class="text-emerald-300">`Bearer ${bearer}`</span>,
+    ...(options.headers || {}),
+  }});
+
+  <span class="text-sky-300">let</span> res = <span class="text-sky-300">await</span> fetchWithRateLimitRetry(url, send(token), <span class="text-amber-300">3</span>);
+
+  <span class="text-slate-500">// Guide §336 fallback: on 401 try one silent token renewal before giving up.</span>
+  <span class="text-sky-300">if</span> (res.status === <span class="text-amber-300">401</span>) {
+    <span class="text-sky-300">try</span> {
+      <span class="text-sky-300">const</span> refreshed = <span class="text-sky-300">await</span> refreshViaRefreshToken(base);
+      res = <span class="text-sky-300">await</span> fetchWithRateLimitRetry(url, send(refreshed), <span class="text-amber-300">3</span>);
+    } <span class="text-sky-300">catch</span> { <span class="text-slate-500">/* no usable refresh token — treat as signed out */</span> }
+  }
+
+  <span class="text-sky-300">if</span> (res.status === <span class="text-amber-300">429</span>) <span class="text-sky-300">throw</span> rateLimitedError();
+  <span class="text-sky-300">if</span> (res.status === <span class="text-amber-300">401</span>) {
+    <span class="text-slate-500">// Still 401 after refresh — genuinely signed out.</span>
+    <span class="text-sky-300">await</span> browser.storage.local.<span class="text-amber-300">remove</span>([<span class="text-amber-300">tokenKeyFor</span>(base)]);
+    <span class="text-sky-300">throw</span> unauthenticatedError();
+  }
+  <span class="text-sky-300">if</span> (res.status === <span class="text-amber-300">403</span>) <span class="text-sky-300">throw</span> forbiddenError();
+  <span class="text-sky-300">if</span> (!res.ok) <span class="text-sky-300">throw new</span> <span class="text-rose-300">Error</span>(<span class="text-emerald-300">`DealerCore request failed (${res.status}).`</span>);
+  <span class="text-sky-300">return</span> res.<span class="text-amber-300">json</span>();
+}</code></pre>
+    </div>
+
+    <p class="mt-4">
+      Tokens renew in one of two ways. OAuth sessions store a per-environment
+      <code class="font-mono text-[13px]">refresh_*</code> key (<b>refreshViaRefreshToken()</b> :596); a handshake
+      session has none, so a 401 falls back to re-running the silent handshake. Both paths fail to the
+      Login button, never to a stale success.
+    </p>
+    <p class="mt-2">
+      Self-healing also happens passively: because every DealerCore page load fires a handshake, a
+      user who re-authenticates in the browser is picked up automatically the next time they visit
+      the app — no extension interaction required.
+    </p>
+
+    <h3 id="throttling" class="anchor">§8 — Throttling guard</h3>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>fetchWithRateLimitRetry()</b> :221</p>
+    <p>
+      Handshakes are capped at 30/min and authenticated APIs at 120/min (see auth-guide §8 and §9/§15).
+      Every API call goes through <b>fetchWithRateLimitRetry()</b>, which reads
+      <code class="font-mono text-[13px]">Retry-After</code> on a <code class="font-mono text-[13px]">429</code> and
+      re-sends after the server-appointed wait (at most three attempts, then it surfaces a
+      <code class="font-mono text-[13px]">rateLimited</code> error the UI can display). Bulk syncs are additionally
+      capped at 10 pages / 250 vehicles (<b>fetchAllVehicles()</b> :720) so a large inventory cannot
+      burn the whole budget. The bridge duplicates this by reporting <code class="font-mono text-[13px]">rateLimited</code>
+      instead of pretending success (<span class="text-slate-400">dealercore-bridge.content.js :32</span>).
+    </p>
+
+    <h2 id="signout" class="anchor">Sign out</h2>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>clearDealerCoreSession()</b> :773 · triggered from <b>Sidepanel.jsx</b> → <b>handleLogout()</b> :356 · routed by <b>background.js</b> :42</p>
+    <p>Sign-out must work identically regardless of which flow authenticated the session, so it never inspects the UI's auth object.</p>
+    <ol>
+      <li>Remove <strong>every</strong> <code class="font-mono text-[13px]">token_*</code> and <code class="font-mono text-[13px]">refresh_*</code> key, not just the active origin — otherwise a stale dev token, or a spent refresh token, can silently reconnect after switching to prod.</li>
+      <li>Remove <code class="font-mono text-[13px]">dealercore_session</code> and <code class="font-mono text-[13px]">auth</code>.</li>
+      <li>Set <code class="font-mono text-[13px]">dealercore_signed_out = true</code> to latch the automatic handshake off.</li>
+    </ol>
+    <p>
+      Step 3 matters: without it, the very next DealerCore tab load would immediately mint a fresh
+      token and the user could never actually sign out.
+    </p>
+
+    <!-- ───── developer guide ───── -->
+    <h2 id="setup" class="anchor">Developer guide</h2>
+    <p class="fileref">Edit <b>utils/dealercore-config.js</b> · declared in <b>wxt.config.ts</b> · verify with <b>AuthModal.jsx</b> → <b>handleDiagnose()</b> :133</p>
+
+    <h3>Step 1 — Create the OAuth client in Nova</h3>
+    <ol>
+      <li>Sign in to the DealerCore <strong>Nova admin panel</strong> (this is a separate app from the main DealerCore application).</li>
+      <li>Go to <strong>Integrations → OAuth Clients</strong> and create a client.</li>
+      <li>Set <strong>Redirect URIs</strong> to <code class="font-mono text-[12px]">https://&lt;extension-id&gt;.chromiumapp.org/</code> — trailing slash included.</li>
+      <li>Tick <strong>First Party</strong>. This sets <code class="font-mono text-[12px]">first_party = true</code> and is what bypasses the consent screen.</li>
+      <li>Leave it <strong>public</strong> — no client secret.</li>
+      <li>Copy the generated <strong>Client ID</strong>.</li>
+    </ol>
+
+    <div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3.5 text-[13px] leading-relaxed text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+      <strong>Pin your extension ID before you start.</strong> An unpacked extension without a manifest
+      <code class="font-mono">key</code> derives its ID from the folder path, so moving or renaming the
+      directory silently changes it and invalidates the registered redirect URI. Open
+      <code class="font-mono">chrome://extensions</code>, copy the ID, and add a <code class="font-mono">key</code>
+      to the manifest so it can never drift.
+    </div>
+
+    <h3>Step 2 — Point the extension at your environment</h3>
+    <p>Edit <code class="font-mono text-[13px]">utils/dealercore-config.js</code> — the only file that needs changing per environment.</p>
+    <div class="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <pre class="nice-scroll overflow-x-auto bg-slate-900 p-4 font-mono text-[12.5px] leading-relaxed text-slate-100"><code><span class="text-sky-300">export const</span> DEALERCORE_CONFIG = {
+  CLIENT_ID: <span class="text-emerald-300">'9a5c8e32-2d14-41b9-8390-1c5c0a377755'</span>,
+  DEFAULT_DOMAIN: <span class="text-emerald-300">'https://dev.dealercore.com.au'</span>,  <span class="text-slate-500">// origin only</span>
+  REDIRECT_PATH: <span class="text-emerald-300">'/'</span>,
+  HANDSHAKE_SEND_CLIENT_ID: <span class="text-amber-300">false</span>,
+  SCOPE: <span class="text-emerald-300">''</span>,
+};</code></pre>
+    </div>
+    <p class="text-[13px]">Never append <code class="font-mono">/nova</code> — Nova is the admin panel and is not part of the runtime flow.</p>
+
+    <h3>Step 3 — Build and load</h3>
+    <div class="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <pre class="nice-scroll overflow-x-auto bg-slate-900 p-4 font-mono text-[12.5px] leading-relaxed text-slate-100"><code><span class="text-slate-400"># production build</span>
+npx wxt build
+
+<span class="text-slate-400"># or dev with hot reload</span>
+npx wxt</code></pre>
+    </div>
+    <p class="text-[13px]">Load <code class="font-mono">.output/chrome-mv3</code> as an unpacked extension via <code class="font-mono">chrome://extensions</code> → <em>Load unpacked</em>.</p>
+
+    <h3>Step 4 — Verify the server before touching the UI</h3>
+    <p>Confirm registration independently of the extension. This isolates server misconfiguration from extension bugs in one step.</p>
+    <div class="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <pre class="nice-scroll overflow-x-auto bg-slate-900 p-4 font-mono text-[12.5px] leading-relaxed text-slate-100"><code>curl -i <span class="text-emerald-300">"https://dev.dealercore.com.au/oauth/authorize?client_id=&lt;CLIENT_ID&gt;&amp;redirect_uri=https%3A%2F%2F%3Cid%3E.chromiumapp.org%2F&amp;response_type=code&amp;code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&amp;code_challenge_method=S256"</span></code></pre>
+    </div>
+    <div class="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <table class="min-w-full text-left text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-800/60">
+          <tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <th class="px-4 py-2.5 font-semibold">Result</th>
+            <th class="px-4 py-2.5 font-semibold">Meaning</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-emerald-600 dark:text-emerald-400">302 → /login</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Correct. Client and redirect are registered.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-rose-600 dark:text-rose-400">401 invalid_client</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Client unknown, revoked, or not first-party.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-amber-600 dark:text-amber-400">400 invalid_request</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Malformed parameters — check PKCE and the trailing slash.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Step 5 — Smoke-test the landing page</h3>
+    <ol>
+      <li><strong>Silent path, tab open:</strong> sign in to the <em>main</em> DealerCore app, leave that tab open, then open the sidepanel. You should briefly see the spinner, then land straight on the listing view — no click, no popup.</li>
+      <li><strong>Silent path, <em>no</em> tab open:</strong> close every DealerCore tab, then open the sidepanel. It should connect anyway via the direct handshake. This is the case that previously fell back to the button.</li>
+      <li><strong>Stale extension reload:</strong> with a DealerCore tab open, hit reload on <em>chrome://extensions</em>, then reopen the sidepanel. The bridge is injected on demand, so this must still connect without you refreshing that tab.</li>
+      <li><strong>Not signed in:</strong> sign out of DealerCore in the browser, clear the extension's storage, open the sidepanel. The spinner should settle on <em>Connect with DealerCore</em> — and must <em>not</em> show an error.</li>
+      <li><strong>Flow A:</strong> press <em>Connect with DealerCore</em>. Expect the DealerCore sign-in page, then a successful token exchange.</li>
+      <li><strong>Flow A failure:</strong> sign in with bad credentials. Expect a red <em>Couldn't connect</em> panel with the server's own message and a <em>Try again</em> button.</li>
+      <li><strong>Reuse:</strong> close and reopen the panel. A stored token should be revalidated and reused, with dealer and branch still populated in the header and Settings.</li>
+    </ol>
+    <p class="text-[13px]">
+      To confirm the silent path is genuinely non-intrusive, watch for two things: no tab should
+      open, and focus should never leave the tab you were using.
+    </p>
+
+    <!-- ───── reference ───── -->
+    <h2 id="config" class="anchor">Configuration reference</h2>
+    <p class="fileref">utils/<b>dealercore-config.js</b> :4 → <b>DEALERCORE_CONFIG</b></p>
+    <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <table class="min-w-full text-left text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-800/60">
+          <tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <th class="px-4 py-2.5 font-semibold">Key</th>
+            <th class="px-4 py-2.5 font-semibold">Default</th>
+            <th class="px-4 py-2.5 font-semibold">Notes</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">CLIENT_ID</td><td class="px-4 py-3 font-mono text-[12px] text-slate-500">uuid</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">First-party client from Nova.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">DEFAULT_DOMAIN</td><td class="px-4 py-3 font-mono text-[12px] text-slate-500">dev.dealercore.com.au</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Origin only; drives every endpoint.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">PROD_DOMAIN</td><td class="px-4 py-3 font-mono text-[12px] text-slate-500">dealercore.com.au</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Declared but not yet consumed by any code path.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">REDIRECT_PATH</td><td class="px-4 py-3 font-mono text-[12px] text-slate-500">/</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Path appended to the runtime extension ID.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">HANDSHAKE_SEND_CLIENT_ID</td><td class="px-4 py-3 font-mono text-[12px] text-amber-600 dark:text-amber-400">false</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Set <code class="font-mono text-[12px]">true</code> once the client is first-party.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">SCOPE</td><td class="px-4 py-3 font-mono text-[12px] text-slate-500">''</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Empty omits the param entirely.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="api" class="anchor">API surface</h2>
+    <p class="fileref">Exported from utils/<b>dealercore-api.js</b></p>
+    <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <table class="min-w-full text-left text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-800/60">
+          <tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <th class="px-4 py-2.5 font-semibold">Function</th>
+            <th class="px-4 py-2.5 font-semibold">Returns</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">getDealerCoreBaseUrl()</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Active origin, from the current tab when possible.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">getAccessToken(base?)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px]">{ base, token }</code> for that origin.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">tryAutoConnect()</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px]">{ ok, base?, me?, via? | reason }</code> — silent, never throws. <code class="font-mono text-[12px]">via</code> is <code class="font-mono text-[12px]">'existing-token'</code>, <code class="font-mono text-[12px]">'direct'</code> or <code class="font-mono text-[12px]">'handshake'</code>. See <a href="#auto-connect" class="text-brand-600 underline dark:text-brand-400">auto-connect</a>.</td></tr>
+        <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">handshakeFromExtension(base)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">- - internal. Posts the handshake from the extension page with <code class="font-mono text-[12px]">credentials: 'include'</code>. Needs no open tab. Returns <code class="font-mono text-[12px]">{ base, me }</code>; throws with <code class="font-mono text-[12px]">err.unauthenticated</code> on a 401.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">connectViaSession(opts?)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px]">{ base, me }</code>. Accepts <code class="font-mono text-[12px]">openTabIfMissing</code> and <code class="font-mono text-[12px]">focus</code>.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">launchOAuthLogin(base)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Access token — Flow A. Opens the sign-in page, so it is only called from an explicit click.</td></tr>
+        <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">persistSessionSnapshot(base, me)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Internal. Caches the render-only session snapshot and clears the sign-out latch. Called by both <code class="font-mono text-[12px]">finalizeSession()</code> and the token-revalidation branch of <code class="font-mono text-[12px]">tryAutoConnect()</code>.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">fetchMe(base, token)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">User, dealer and branch context.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">verifySession()</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px]">{ connected, me?, reason? }</code>, flow-agnostic.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">diagnoseDealercore(base)</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Per-endpoint status report.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">clearDealerCoreSession()</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Removes all tokens; latches sign-out.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="manifest" class="anchor">Manifest &amp; permissions</h2>
+    <p class="fileref"><b>wxt.config.ts</b> :11–18 · content-script matches in entrypoints/<b>dealercore-bridge.content.js</b> :95</p>
+    <p>Four permissions are load-bearing. Each maps to a specific requirement.</p>
+    <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <table class="min-w-full text-left text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-800/60">
+          <tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <th class="px-4 py-2.5 font-semibold">Permission</th>
+            <th class="px-4 py-2.5 font-semibold">Why it is required</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">identity</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Supplies the extension ID for the redirect URI and powers <code class="font-mono text-[12px]">launchWebAuthFlow</code>.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">storage</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Token and session persistence.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">scripting</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Re-injects the bridge when a tab loads before the script is ready.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">cookies</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Session inspection for the handshake.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">host_permissions</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">DealerCore origins for the bridge, plus Facebook for automation.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-4 text-[13px]">
+      The bridge matches <code class="font-mono">dealercore.com.au</code>, <code class="font-mono">*.dealercore.com.au</code>,
+      <code class="font-mono">*.test</code> and <code class="font-mono">localhost</code>. Widen the list rather
+      than loosening the origin checks in the message listener.
+    </p>
+
+    <!-- ───── troubleshooting ───── -->
+    <h2 id="troubleshooting" class="anchor">Troubleshooting</h2>
+    <p class="fileref">utils/<b>dealercore-api.js</b> → <b>diagnoseDealercore()</b> :175 · <b>probeAuthorize()</b> :107 · <b>explainProbe()</b> :139</p>
+    <p>Open the modal's <strong>Troubleshooting</strong> disclosure for a per-endpoint status report. Read it alongside the table below.</p>
+
+    <div class="mt-4 space-y-3">
+      <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-sm font-semibold text-slate-900 dark:text-white">Handshake returns <code class="font-mono text-[12px] text-rose-600">401</code></p>
+        <p class="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">No DealerCore session in this browser profile. Sign in to the <strong>main app</strong>, not <code class="font-mono">/nova</code>, then retry — the extension opens the tab for you.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-sm font-semibold text-slate-900 dark:text-white">Handshake always 401 even while signed in</p>
+        <p class="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">The content script is not injected on that tab. Reload the DealerCore tab, or confirm the host is in the bridge's <code class="font-mono">matches</code>.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-sm font-semibold text-slate-900 dark:text-white">Sign-out does not stick</p>
+        <p class="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">A DealerCore tab fired a handshake and re-minted the token. Confirm <code class="font-mono">dealercore_signed_out</code> is <code class="font-mono">true</code> and close DealerCore tabs.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-sm font-semibold text-slate-900 dark:text-white">Works in dev, breaks in prod</p>
+        <p class="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">Tokens are per-origin, so both can be connected at once. Verify which base URL is active via <code class="font-mono">dealercore_base_url</code>.</p>
+      </div>
+    </div>
+
+    <h2 id="quirks" class="anchor">Server quirks</h2>
+    <p class="fileref">Observed against <b>dev.dealercore.com.au</b> · implemented in utils/<b>dealercore-api.js</b> → <b>buildAuthorizeUrl()</b> :74, <b>probeAuthorize()</b> :107 · contradicts <b>auth-guide.md</b> :151</p>
+    <p>Hard-won knowledge about this deployment. Each item was verified empirically.</p>
+
+    <div class="mt-4 space-y-3">
+      <div class="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
+        <div class="flex items-center gap-2">
+          <span class="rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">Gotcha</span>
+          <p class="text-sm font-bold text-slate-900 dark:text-white">The <code class="font-mono">Accept</code> header flips the result</p>
+        </div>
+        <p class="mt-1.5 text-[13px] leading-relaxed text-slate-700 dark:text-slate-300">
+          <code class="font-mono">/oauth/authorize</code> returns <strong>302</strong> for any HTML-ish
+          <code class="font-mono">Accept</code> but <strong>401</strong> for
+          <code class="font-mono">application/json</code>. A healthy client therefore looks broken to
+          any JSON-flavoured health check. Never probe this endpoint as JSON.
+        </p>
+        <div class="mt-2.5 overflow-hidden rounded-lg bg-slate-900">
+          <table class="min-w-full text-left font-mono text-[11.5px]">
+            <tbody class="divide-y divide-slate-800">
+              <tr><td class="px-3 py-1.5 text-slate-400">text/html,application/xhtml+xml</td><td class="px-3 py-1.5 text-emerald-400">302 → /login</td></tr>
+              <tr><td class="px-3 py-1.5 text-slate-400">full Chrome header</td><td class="px-3 py-1.5 text-emerald-400">302 → /login</td></tr>
+              <tr><td class="px-3 py-1.5 text-slate-400">application/json</td><td class="px-3 py-1.5 text-rose-400">401</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-sm font-semibold text-slate-900 dark:text-white">PKCE is mandatory</p>
+        <p class="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">Omitting <code class="font-mono">code_challenge</code> yields <code class="font-mono">400 invalid_request</code>. The upstream guide's authorize URL omits it — the doc is wrong, and following it literally breaks a correctly configured client.</p>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-sm font-semibold text-slate-900 dark:text-white">The redirect URI trailing slash is significant</p>
+        <p class="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400"><code class="font-mono">…/</code> and <code class="font-mono">…</code> are different registrations. Omitting the slash produces <code class="font-mono">401 invalid_client</code>.</p>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-sm font-semibold text-slate-900 dark:text-white">Distinguishing "unknown client" from "not first-party"</p>
+        <p class="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">Both surface as <code class="font-mono">401 invalid_client</code>. Send a deliberately invalid client ID as a control: if it also returns <code class="font-mono">401 invalid_client</code> while the real one returns <code class="font-mono">400</code> or <code class="font-mono">302</code>, the real client is registered and the problem is the first-party flag or its grants.</p>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-sm font-semibold text-slate-900 dark:text-white">Confirming the client row exists</p>
+        <p class="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">A <code class="font-mono">POST /oauth/token</code> with <code class="font-mono">grant_type=client_credentials</code> and no secret answers <code class="font-mono">400 unauthorized_client</code> for a real public client, but <code class="font-mono">401 invalid_client</code> for a nonexistent one. Useful when debugging server state without database access.</p>
+      </div>
+    </div>
+
+    <h2 id="errors" class="anchor">Error decoder</h2>
+    <p class="fileref">Messages produced by <b>explainProbe()</b> :140, <b>launchOAuthLogin()</b> :534 and <b>authed()</b> :641</p>
+    <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+      <table class="min-w-full text-left text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-800/60">
+          <tr class="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <th class="px-4 py-2.5 font-semibold">Symptom</th>
+            <th class="px-4 py-2.5 font-semibold">Cause</th>
+            <th class="px-4 py-2.5 font-semibold">Fix</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px] text-rose-600 dark:text-rose-400">invalid_client</code></td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Unknown, revoked, or not first-party.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Nova → Integrations → OAuth Clients.</td></tr>
+          <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px] text-amber-600 dark:text-amber-400">invalid_request</code></td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Missing PKCE or malformed parameter.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Restore <code class="font-mono text-[12px]">code_challenge</code>.</td></tr>
+          <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Page will not load</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Chrome collapsed a real HTTP error.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Read the pre-flight status; open the URL in a tab.</td></tr>
+          <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400">No authorization code</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">User closed the popup or denied consent.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Retry; confirm the client is first-party.</td></tr>
+          <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Handshake completed, no token</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Response lacked a token field.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Check the endpoint response shape in devtools.</td></tr>
+          <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Redirect URI mismatch</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Folder moved; extension ID changed.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Re-register the ID, or pin it with a manifest <code class="font-mono text-[12px]">key</code>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <footer class="mt-16 border-t border-slate-200 pt-6 dark:border-slate-800">
+      <p class="text-[12px] text-slate-400">
+        Authentication · FB Marketplace Automator · Both flows verified against
+        <code class="font-mono">dev.dealercore.com.au</code>.
+      </p>
+    </footer>
+  </main>
+</div>
+
+<!-- mobile sidebar toggle -->
+<div class="fixed bottom-5 left-5 z-30 lg:hidden">
+  <button onclick="document.getElementById('m').classList.toggle('hidden')" class="grid h-12 w-12 place-items-center rounded-full bg-brand-600 text-white shadow-xl shadow-brand-600/30" aria-label="Toggle navigation">
+    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+</div>
+<div id="m" class="fixed inset-0 z-40 hidden lg:hidden">
+  <div class="absolute inset-0 bg-slate-900/50" onclick="document.getElementById('m').classList.add('hidden')"></div>
+  <nav class="nice-scroll absolute inset-y-0 left-0 w-72 overflow-y-auto bg-white p-5 dark:bg-slate-900">
+    <p class="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">Documentation</p>
+    <p class="mb-2 text-sm font-bold text-brand-700 dark:text-brand-300">Authentication</p>
+    <ul class="space-y-0.5">
+      <li><a href="#overview" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Overview</a></li>
+      <li><a href="#architecture" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Architecture</a></li>
+      <li><a href="#source-map" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Source map</a></li>
+      <li><a href="#storage" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Storage &amp; keys</a></li>
+      <li><a href="#flow-b" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Flow B · Silent handshake</a></li>
+      <li><a href="#auto-connect" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Auto-connect on open</a></li>
+      <li><a href="#flow-a" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Flow A · Interactive OAuth</a></li>
+      <li><a href="#setup" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Developer guide</a></li>
+      <li><a href="#config" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Configuration</a></li>
+      <li><a href="#troubleshooting" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Troubleshooting</a></li>
+      <li><a href="#quirks" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 dark:text-slate-400">Server quirks</a></li>
+    </ul>
+  </nav>
+</div>
+
+<script>
+  // Scroll-spy: highlight the sidebar entry for the section in view.
+  const links = Array.from(document.querySelectorAll('.navlink[href^="#"]'));
+  const byId = new Map(links.map(l => [l.getAttribute('href').slice(1), l]));
+  const sections = Array.from(document.querySelectorAll('h2[id], h3[id]'));
+
+  const setActive = (id) => {
+    links.forEach(l => l.classList.remove('active'));
+    byId.get(id)?.classList.add('active');
+  };
+
+  const visible = new Map();
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => visible.set(e.target.id, e.isIntersecting ? e.boundingClientRect.top : null));
+    const inView = sections
+      .filter(s => visible.get(s.id) != null)
+      .sort((a, b) => visible.get(a.id) - visible.get(b.id));
+    if (inView.length) setActive(inView[0].id);
+  }, { rootMargin: '-80px 0px -70% 0px', threshold: 0 });
+
+  sections.forEach(s => io.observe(s));
+
+  // Fallback: highlight based on scroll position when nothing is intersecting.
+  window.addEventListener('scroll', () => {
+    if (visible.size && Array.from(visible.values()).some(v => v != null)) return;
+    let current = sections[0]?.id;
+    for (const s of sections) {
+      if (s.getBoundingClientRect().top <= 140) current = s.id;
+    }
+    if (current) setActive(current);
+  }, { passive: true });
+
+  // Close the mobile drawer after choosing a destination.
+  document.querySelectorAll('#m a[href^="#"]').forEach(a =>
+    a.addEventListener('click', () => document.getElementById('m').classList.add('hidden'))
+  );
+</script>
+</body>
+</html>

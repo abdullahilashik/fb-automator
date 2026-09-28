@@ -10,6 +10,8 @@ const Header = ({
   onToggleAvatar,
   onLogout,
   onRefresh,
+  syncing,
+  syncMeta,
   onOpenSettings,
 }) => (
   <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800 shrink-0">
@@ -19,10 +21,34 @@ const Header = ({
         alt="DealerCore"
         className="h-6 w-auto object-contain"
       />
+      {syncMeta && (
+        <span
+          className="text-[10px] font-medium text-gray-400 dark:text-gray-500"
+          title={`${syncMeta.total} vehicle${syncMeta.total === 1 ? "" : "s"} pending on DealerCore`}
+        >
+          {syncMeta.pending_post_count != null && (
+            <span className="text-sky-600 dark:text-sky-400">
+              {syncMeta.pending_post_count} to post
+            </span>
+          )}
+          {syncMeta.pending_post_count != null && syncMeta.pending_update_count != null && (
+            <span className="mx-1 text-gray-300 dark:text-gray-600">|</span>
+          )}
+          {syncMeta.pending_update_count != null && (
+            <span>{syncMeta.pending_update_count} to update</span>
+          )}
+        </span>
+      )}
     </div>
     <div className="flex items-center gap-3 text-gray-400">
-      <button className="hover:text-gray-600 dark:hover:text-gray-300" onClick={onRefresh}>
-        <RefreshCw className="w-4 h-4" />
+      <button
+        className="hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-50"
+        onClick={onRefresh}
+        disabled={syncing}
+        title="Sync from DealerCore"
+        aria-label="Sync from DealerCore"
+      >
+        <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
       </button>
       <div className="w-[1px] h-4 bg-gray-200 dark:bg-gray-700" />
       <button className="hover:text-gray-600 dark:hover:text-gray-300">

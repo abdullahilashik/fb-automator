@@ -1,5 +1,7 @@
 import React from "react";
 import { browser } from "wxt/browser";
+import { toDealerCoreVehicle } from "@/utils/default-items";
+import { db } from "@/utils/db";
 import { PlayCircle, Car, Settings, CheckCircle } from "lucide-react";
 
 const testData = [
@@ -45,15 +47,30 @@ const testData = [
 
 const Popup = () => {
   const startAutomation = () => {
-    // 1. Save data to storage
-    browser.storage.local.set({ items: testData, currentIndex: 0, results: [] }, () => {
+    // 1. Seed the Dexie worklist with the sample data (extension-origin page,
+    // so the IndexedDB is reachable directly), then hand over the run queue.
+    const rows = testData.map(toDealerCoreVehicle).filter(Boolean);
+    db.vehicles.bulkPut(rows).then(() => {
+      browser.storage.local.set({
+        runQueueIds: testData.map((d) => d.id),
+        currentIndex: 0,
+        results: [],
+        automation_state: {
+          phase: "running",
+          cancelRequested: false,
+          mode: "publish",
+        },
+      });
       browser.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const tab = tabs[0];
         const targetUrl = "https://www.facebook.com/marketplace/create/vehicle";
 
         if (tab.url.startsWith("https://www.facebook.com/marketplace/create/")) {
             // Already on the right page, send message to trigger runAutomation()
-            browser.tabs.sendMessage(tab.id, { action: "START_AUTOMATION" });
+            browser.tabs.sendMessage(tab.id, {
+              action: "START_AUTOMATION",
+              mode: "publish",
+            });
         } else {
             // Navigate to the creation page
             browser.tabs.update(tab.id, { url: targetUrl });

@@ -1,5 +1,5 @@
 import React from "react";
-import { Loader2, Send } from "lucide-react";
+import { Loader2, Send, XCircle } from "lucide-react";
 import Header from "../_components/Header";
 
 const STATUS_STYLES = {
@@ -12,6 +12,11 @@ const STATUS_STYLES = {
     card: "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950",
     footer: "text-red-700 dark:text-red-400",
     message: "Required fields couldn't be filled",
+  },
+  cancelled: {
+    card: "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950",
+    footer: "text-amber-700 dark:text-amber-400",
+    message: "Cancelled before publishing",
   },
   processing: {
     card: "border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950",
@@ -38,8 +43,16 @@ export function buildVehicles(items, results, currentIndex, running) {
     let progress = 0;
 
     if (res) {
-      status = res.status === "Success" ? "success" : "error";
-      progress = res.status === "Success" ? 100 : 95;
+      if (res.status === "Success") {
+        status = "success";
+        progress = 100;
+      } else if (res.status === "Cancelled") {
+        status = "cancelled";
+        progress = 0;
+      } else {
+        status = "error";
+        progress = 95;
+      }
     } else if (running && index === currentIndex) {
       status = "processing";
       progress = 50;
@@ -79,6 +92,8 @@ const Listing = ({
   onToggleAll,
   onClearSelection,
   onStartAutomation,
+  onCancelAutomation,
+  cancelling,
   onSaveDraft,
 }) => (
   <div className="h-full w-full bg-white dark:bg-gray-900 flex flex-col overflow-hidden shadow-xl">
@@ -217,17 +232,33 @@ const Listing = ({
         </button>
       </div>
       <div className="space-y-2">
-        <button
-          onClick={onStartAutomation}
-          disabled={selectedCount === 0 || running}
-          className="text-sm w-full bg-[#00a2e8] hover:bg-[#008bc9] text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-40"
-        >
-          {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          {running ? "Publishing..." : "Publish"}
-        </button>
+        {running ? (
+          <button
+            onClick={onCancelAutomation}
+            disabled={cancelling}
+            className="text-sm w-full bg-white dark:bg-gray-800 border border-red-300 dark:border-red-900 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+          >
+            {cancelling ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <XCircle className="w-4 h-4" />
+            )}
+            {cancelling ? "Cancelling…" : "Cancel"}
+          </button>
+        ) : (
+          <button
+            onClick={onStartAutomation}
+            disabled={selectedCount === 0}
+            className="text-sm w-full bg-[#00a2e8] hover:bg-[#008bc9] text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-40"
+          >
+            <Send className="w-4 h-4" />
+            Publish
+          </button>
+        )}
         <button
           onClick={onSaveDraft}
-          className="text-sm w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-semibold py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all"
+          disabled={selectedCount === 0}
+          className="text-sm w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-semibold py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all disabled:opacity-40"
         >
           Save as draft
         </button>

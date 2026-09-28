@@ -1,30 +1,48 @@
 import { findLabelByText } from "./find-label-by";
 import { typeLikeHuman } from "./input-simulation";
 import { sleep } from "./sleep";
+import { browser } from "wxt/browser";
 
 // Handle Facebook's custom Dropdowns
-export const handleDropdown = async (labelName, optionText) => {
-    if (!optionText) return;
+export const handleDropdown = async (labelName, optionText, shouldAbort) => {
+    if (shouldAbort?.()) return;
     const label = findLabelByText(labelName);
     if (!label) return console.log(`Skipping ${labelName}: Field not found.`);
 
     label.click();
     await sleep(800); // Wait for menu
+    if (shouldAbort?.()) return;
 
     const options = Array.from(document.querySelectorAll('[role="option"]'));
-    const target = options.find(opt =>
-        opt.textContent.toLowerCase().includes(optionText.toLowerCase())
+    const value = optionText ? String(optionText) : '';
+    const target = value && options.find(opt =>
+        opt.textContent.toLowerCase().includes(value.toLowerCase())
     );
 
     if (target) {
         target.click();
         await sleep(500);
+        return;
+    }
+
+    // No REST-API value, or no matching option in the menu — select "Other"
+    // instead of leaving the dropdown untouched.
+    if (shouldAbort?.()) return;
+    const other = options.find(opt => {
+        const text = opt.textContent.trim().toLowerCase();
+        return text === 'other' || text.startsWith('other ');
+    });
+    if (other) {
+        console.log(`No "${value}" option for ${labelName} — selecting "Other".`);
+        other.click();
+        await sleep(500);
     }
 };
 
 // handle location dropdown
-export const handleAutosuggestDropdown = async (locationText) => {
+export const handleAutosuggestDropdown = async (locationText, shouldAbort) => {
     if (!locationText) return;
+    if (shouldAbort?.()) return;
     const label = findLabelByText('Location');
     const input = label?.querySelector('input');
     if (!input) return;
@@ -33,12 +51,13 @@ export const handleAutosuggestDropdown = async (locationText) => {
     input.focus();
     input.value = "";
     for (let i = 0; i < locationText.length; i++) {
+        if (shouldAbort?.()) return;
         input.value = locationText.substring(0, i + 1);
         input.dispatchEvent(new InputEvent('input', { bubbles: true, data: locationText[i] }));
         await sleep(Math.random() * 50 + 30);
     }
     input.dispatchEvent(new Event('change', { bubbles: true }));
-    
+
     // Wait for the listbox to appear
     await sleep(1500);
 
@@ -63,6 +82,7 @@ export const handleAutosuggestDropdown = async (locationText) => {
     // If no suggestions, try shorter text
     let currentText = locationText;
     while (options.length === 0 && currentText.length > 2) {
+        if (shouldAbort?.()) return;
         currentText = currentText.slice(0, -1);
         input.value = currentText;
         input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -134,22 +154,49 @@ export const handleCheckbox = async (labelText) => {
 };
 
 // Handle Photo Uploads (via DataTransfer)
-export const handlePhotos = async (urls) => {
+export const handlePhotos = async (urls, shouldAbort) => {
     if (!urls || urls.length === 0) return;
+    if (shouldAbort?.()) return;
     const fileInput = document.querySelector('input[type="file"][accept*="image"]');
     if (!fileInput) return;
 
     const dataTransfer = new DataTransfer();
     for (const url of urls) {
+        if (shouldAbort?.()) return;
         try {
-            const resp = await fetch(url);
-            const blob = await resp.blob();
-            const file = new File([blob], "image.jpg", { type: "image/jpeg" });
-            dataTransfer.items.add(file);
+            const file = await fetchImageAsFile(url, shouldAbort);
+            if (file) dataTransfer.items.add(file);
         } catch (e) {
             console.error("Image fetch failed", e);
         }
     }
+    if (shouldAbort?.()) return;
     fileInput.files = dataTransfer.files;
     fileInput.dispatchEvent(new Event('change', { bubbles: true }));
 };
+
+// Download one image and convert it to a File for the upload input.
+// A plain CORS fetch works when the bucket sends Access-Control-Allow-Origin.
+// `mode: 'no-cors'` can never work here — it yields an "opaque" response whose
+// body cannot be read. When CORS blocks the plain fetch, the bytes are fetched
+// through the extension background, which can request a host permission for the
+// image origin once and then read the response regardless of the bucket's
+// CORS config.
+async function fetchImageAsFile(url, shouldAbort) {
+    try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        return new File([blob], 'image.jpg', { type: blob.type || 'image/jpeg' });
+    } catch (contentError) {
+        if (shouldAbort?.()) return null;
+    }
+    const res = await browser.runtime.sendMessage({ type: 'FETCH_IMAGE', url });
+    if (!res?.success || !res.bytes) {
+        throw new Error(res?.error || 'image fetch failed via background');
+    }
+    const name = url.split('/').pop() || 'image.jpg';
+    return new File([new Uint8Array(res.bytes)], name, {
+        type: res.contentType || 'image/jpeg',
+    });
+}

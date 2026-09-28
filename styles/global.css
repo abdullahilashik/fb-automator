@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Indeterminate progress bar used by the sidepanel's connecting state. */
+@keyframes slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
 body {
   @apply bg-gray-50;
 }

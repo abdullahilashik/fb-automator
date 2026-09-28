@@ -1,6 +1,6 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { browser } from 'wxt/browser';
-import { DEFAULT_ITEMS, appendVehicles } from '@/utils/default-items';
+import { DEFAULT_ITEMS, toDealerCoreVehicle } from '@/utils/default-items';
 
 export const FEED_MESSAGE_SOURCE = 'FB_AUTOMATOR_FEED';
 export const FEED_MESSAGE_TYPE = 'FB_AUTOMATOR_ADD_VEHICLES';
@@ -39,16 +39,30 @@ async function handleFeedMessage(rawItems) {
   const incoming = coerceToArray(rawItems);
   if (!incoming) return { ok: false, error: 'Payload must be an object or array of objects.' };
 
-  const stored = await browser.storage.local.get(['items']);
-  const base =
-    Array.isArray(stored.items) && stored.items.length ? stored.items : [...DEFAULT_ITEMS];
-  const merged = appendVehicles(base, incoming);
-  const added = merged.length - base.length;
+  // The worklist lives in the extension's IndexedDB; this page-origin script
+  // reaches it through the background worker. Flat feed entries round-trip
+  // through the inverse mapper so they share the store with API vehicles.
+  const current = await browser.runtime.sendMessage({ type: 'GET_VEHICLES' });
+  let total = Array.isArray(current?.vehicles) ? current.vehicles.length : 0;
 
-  if (added > 0) {
-    await browser.storage.local.set({ items: merged });
+  // Preserve the old "seed from DEFAULT_ITEMS on an empty store" behaviour.
+  if (total === 0) {
+    const seeds = DEFAULT_ITEMS.map(toDealerCoreVehicle).filter(Boolean);
+    if (seeds.length) {
+      await browser.runtime.sendMessage({ type: 'SYNC_VEHICLES', payload: seeds });
+      total = seeds.length;
+    }
   }
-  return { ok: true, added, total: merged.length };
+
+  const rows = incoming.map(toDealerCoreVehicle).filter(Boolean);
+  let added = 0;
+  if (rows.length) {
+    const res = await browser.runtime.sendMessage({ type: 'SYNC_VEHICLES', payload: rows });
+    if (!res?.success) throw new Error(res?.error || 'Local vehicle sync failed');
+    added = res.added ?? rows.length;
+    total += res.count ?? rows.length;
+  }
+  return { ok: true, added, total };
 }
 
 export default defineContentScript({
