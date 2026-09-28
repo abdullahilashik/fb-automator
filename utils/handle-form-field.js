@@ -4,7 +4,6 @@ import { sleep } from "./sleep";
 
 // Handle Facebook's custom Dropdowns
 export const handleDropdown = async (labelName, optionText, shouldAbort) => {
-    if (!optionText) return;
     if (shouldAbort?.()) return;
     const label = findLabelByText(labelName);
     if (!label) return console.log(`Skipping ${labelName}: Field not found.`);
@@ -14,12 +13,27 @@ export const handleDropdown = async (labelName, optionText, shouldAbort) => {
     if (shouldAbort?.()) return;
 
     const options = Array.from(document.querySelectorAll('[role="option"]'));
-    const target = options.find(opt =>
-        opt.textContent.toLowerCase().includes(optionText.toLowerCase())
+    const value = optionText ? String(optionText) : '';
+    const target = value && options.find(opt =>
+        opt.textContent.toLowerCase().includes(value.toLowerCase())
     );
 
     if (target) {
         target.click();
+        await sleep(500);
+        return;
+    }
+
+    // No REST-API value, or no matching option in the menu — select "Other"
+    // instead of leaving the dropdown untouched.
+    if (shouldAbort?.()) return;
+    const other = options.find(opt => {
+        const text = opt.textContent.trim().toLowerCase();
+        return text === 'other' || text.startsWith('other ');
+    });
+    if (other) {
+        console.log(`No "${value}" option for ${labelName} — selecting "Other".`);
+        other.click();
         await sleep(500);
     }
 };
@@ -149,7 +163,10 @@ export const handlePhotos = async (urls, shouldAbort) => {
     for (const url of urls) {
         if (shouldAbort?.()) return;
         try {
-            const resp = await fetch(url);
+            const resp = await fetch(url, {
+                method: 'GET',
+                mode: 'no-cors'
+            });
             const blob = await resp.blob();
             const file = new File([blob], "image.jpg", { type: "image/jpeg" });
             dataTransfer.items.add(file);
