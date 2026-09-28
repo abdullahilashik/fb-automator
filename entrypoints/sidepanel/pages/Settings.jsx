@@ -1,16 +1,30 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { browser } from "wxt/browser";
 import {
-  ArrowLeft, Bug, ExternalLink, ListChecks, LogIn, LogOut, Monitor, Moon,
-  PlusCircle, RefreshCw, ShieldCheck, ShoppingBag, Sun,
+  ArrowLeft,
+  Bug,
+  ExternalLink,
+  ListChecks,
+  LogIn,
+  LogOut,
+  Monitor,
+  Moon,
+  PlusCircle,
+  RefreshCw,
+  ShieldCheck,
+  ShoppingBag,
+  Sun,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { verifySession } from "@/utils/dealercore-api";
 
 const scrapeFbProfile = () => {
-  const img =
-    document.querySelector('a[role="link"][aria-label] img, [role="banner"] img[alt], header img[alt]');
-  const nameEl = document.querySelector('[role="banner"] [role="link"] span, [aria-label="Menu"] span');
+  const img = document.querySelector(
+    'a[role="link"][aria-label] img, [role="banner"] img[alt], header img[alt]',
+  );
+  const nameEl = document.querySelector(
+    '[role="banner"] [role="link"] span, [aria-label="Menu"] span',
+  );
   return {
     avatar: img?.src || null,
     name: nameEl?.textContent?.trim() || null,
@@ -38,15 +52,31 @@ const QUICK_LINKS = [
   },
 ];
 
-const Settings = ({ theme, onThemeChange, auth, onOpenAuth, onLogout, onBack }) => {
-  const [fb, setFb] = useState({ state: "loading", name: null, avatar: null, userId: null });
+const Settings = ({
+  theme,
+  onThemeChange,
+  auth,
+  onOpenAuth,
+  onLogout,
+  onBack,
+}) => {
+  const [fb, setFb] = useState({
+    state: "loading",
+    name: null,
+    avatar: null,
+    userId: null,
+  });
   const [bugMessage, setBugMessage] = useState("");
   const [checkingDc, setCheckingDc] = useState(false);
 
   // Auth-method agnostic: handshake connections carry no token on `auth`
   // (the token lives under token_<origin>), so detect on identity, not token.
   const dcConnected = !!(auth?.user || auth?.dealer || auth?.branch);
-  const authMethod = auth?.token ? "OAuth" : dcConnected ? "Active session" : null;
+  const authMethod = auth?.token
+    ? "OAuth"
+    : dcConnected
+      ? "Active session"
+      : null;
 
   const checkFacebook = useCallback(async () => {
     setFb({ state: "loading", name: null, avatar: null, userId: null });
@@ -64,7 +94,10 @@ const Settings = ({ theme, onThemeChange, auth, onOpenAuth, onLogout, onBack }) 
       let name = null;
       let avatar = null;
       try {
-        const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+        const [tab] = await browser.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
         if (tab?.url?.includes("facebook.com")) {
           const res = await browser.scripting.executeScript({
             target: { tabId: tab.id },
@@ -105,7 +138,8 @@ const Settings = ({ theme, onThemeChange, auth, onOpenAuth, onLogout, onBack }) 
     }
   };
 
-  const submitBug = () => {    if (!bugMessage.trim()) {
+  const submitBug = () => {
+    if (!bugMessage.trim()) {
       toast.error("Describe the problem first");
       return;
     }
@@ -128,7 +162,9 @@ const Settings = ({ theme, onThemeChange, auth, onOpenAuth, onLogout, onBack }) 
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <h1 className="text-sm font-bold text-gray-900 dark:text-gray-100">Settings</h1>
+        <h1 className="text-sm font-bold text-gray-900 dark:text-gray-100">
+          Settings
+        </h1>
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6">
@@ -219,7 +255,8 @@ const Settings = ({ theme, onThemeChange, auth, onOpenAuth, onLogout, onBack }) 
                 </div>
               ) : fb.state === "logged_out" ? (
                 <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                  Sign in to facebook.com so listings can be published to your account.
+                  Sign in to facebook.com so listings can be published to your
+                  account.
                 </p>
               ) : (
                 <p className="text-[11px] text-gray-500 dark:text-gray-400">
@@ -279,10 +316,13 @@ const Settings = ({ theme, onThemeChange, auth, onOpenAuth, onLogout, onBack }) 
                 <div className="text-[10px] text-gray-500 dark:text-gray-400 space-y-0.5 mb-2">
                   {authMethod && (
                     <p>
-                      Method: <span className="font-semibold">{authMethod}</span>
+                      Method:{" "}
+                      <span className="font-semibold">{authMethod}</span>
                     </p>
                   )}
-                  {auth?.baseUrl && <p className="font-mono break-all">{auth.baseUrl}</p>}
+                  {auth?.baseUrl && (
+                    <p className="font-mono break-all">{auth.baseUrl}</p>
+                  )}
                   {auth?.dealer?.name && <p>Dealer: {auth.dealer.name}</p>}
                   {auth?.branch?.name && <p>Branch: {auth.branch.name}</p>}
                 </div>
@@ -310,7 +350,9 @@ const Settings = ({ theme, onThemeChange, auth, onOpenAuth, onLogout, onBack }) 
                   disabled={checkingDc}
                   className="flex items-center gap-1.5 text-[11px] font-semibold text-blue-500 hover:text-blue-600 transition-colors disabled:opacity-50"
                 >
-                  <RefreshCw className={`w-3 h-3 ${checkingDc ? "animate-spin" : ""}`} />
+                  <RefreshCw
+                    className={`w-3 h-3 ${checkingDc ? "animate-spin" : ""}`}
+                  />
                   Verify
                 </button>
               </div>
@@ -333,8 +375,12 @@ const Settings = ({ theme, onThemeChange, auth, onOpenAuth, onLogout, onBack }) 
                   {Icon && <Icon className="w-3.5 h-3.5" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-semibold text-gray-900 dark:text-gray-100">{label}</p>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">{desc}</p>
+                  <p className="text-[12px] font-semibold text-gray-900 dark:text-gray-100">
+                    {label}
+                  </p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                    {desc}
+                  </p>
                 </div>
                 <ExternalLink className="w-3.5 h-3.5 text-gray-400" />
               </button>
@@ -342,9 +388,12 @@ const Settings = ({ theme, onThemeChange, auth, onOpenAuth, onLogout, onBack }) 
           </div>
         </section>
 
-        <section>
+        <section className="hidden">
           <h2 className="inline-flex text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
-            Report a bug <span className="text-[10px] rounded-full px-2 text-center bg-red-600 text-white ml-4">stall</span>
+            Report a bug{" "}
+            <span className="text-[10px] rounded-full px-2 text-center bg-red-600 text-white ml-4">
+              stall
+            </span>
           </h2>
           <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-3">
             <textarea
@@ -364,7 +413,7 @@ const Settings = ({ theme, onThemeChange, auth, onOpenAuth, onLogout, onBack }) 
             </button>
           </div>
         </section>
-      </div>
+      </div>      
     </div>
   );
 };

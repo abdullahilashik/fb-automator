@@ -120,6 +120,7 @@ const Listing = ({
   onLogout,
   onRefresh,
   onOpenSettings,
+  onBugPage,
   onToggleCar,
   onToggleAll,
   onClearSelection,
@@ -140,6 +141,7 @@ const Listing = ({
       onLogout={onLogout}
       onRefresh={onRefresh}
       onOpenSettings={onOpenSettings}
+      onBugPage={onBugPage}
     />
 
     <div className="flex-1 overflow-y-auto custom-scrollbar p-5">

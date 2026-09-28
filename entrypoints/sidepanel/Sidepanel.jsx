@@ -9,6 +9,7 @@ import { browser } from "wxt/browser";
 import toast from "react-hot-toast";
 import AuthModal from "./AuthModal";
 import Settings from "./pages/Settings";
+import BugPage from "./pages/BugPage";
 import Listing, { buildVehicles } from "./pages/Listing";
 import NotConnected from "./pages/NotConnected";
 import { fromDealerCoreVehicle } from "@/utils/default-items";
@@ -458,9 +459,10 @@ const Sidepanel = () => {
       const cleared = await new Promise((resolve) => {
         const startedAt = Date.now();
         const timer = setInterval(async () => {
-          const data = await browser.storage.local.get(
-            ["runQueueIds", "automation_state"],
-          );
+          const data = await browser.storage.local.get([
+            "runQueueIds",
+            "automation_state",
+          ]);
           if (!data.runQueueIds) {
             clearInterval(timer);
             resolve(true);
@@ -523,12 +525,27 @@ const Sidepanel = () => {
           onLogout={handleLogout}
           onRefresh={loadData}
           onOpenSettings={() => setView("settings")}
+          onBugPage={() => setView("bug")}
           status={connectStatus}
           message={connectMessage}
           onConnect={handleConnect}
         />
       </div>
     );
+
+  if (view === "bug") {
+    // show the bug page
+    return (
+      <BugPage
+        theme={theme}
+          onThemeChange={handleThemeChange}
+          auth={auth}
+          onOpenAuth={() => setAuthModalOpen(true)}
+          onLogout={handleLogout}
+          onBack={() => setView("main")}
+      />
+    );
+  }
 
   return (
     <div className="h-full w-full bg-gray-200 dark:bg-gray-950 flex flex-col overflow-hidden">
@@ -562,6 +579,7 @@ const Sidepanel = () => {
           syncing={syncing}
           syncMeta={syncMeta}
           onOpenSettings={() => setView("settings")}
+          onBugPage={() => setView("bug")}
           onToggleCar={toggleCar}
           onToggleAll={toggleAll}
           onClearSelection={clearSelection}
