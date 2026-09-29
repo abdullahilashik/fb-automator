@@ -503,7 +503,7 @@
 
     <!-- ───── automation ───── -->
     <h2 id="automation" class="anchor">Automation</h2>
-    <p class="fileref">entrypoints/sidepanel/<b>Sidepanel.jsx</b> → <b>startAutomation(mode)</b> :382 · <b>saveDraft()</b> :493 · <b>cancelAutomation()</b> :444 · entrypoints/<b>content/index.js</b> → <b>runAutomation()</b> :281 · <b>loadQueue()</b> :62 · <b>processItem()</b> :76</p>
+    <p class="fileref">entrypoints/sidepanel/<b>Sidepanel.jsx</b> → <b>syncFromDealerCore()</b> :236 · <b>startAutomation(mode)</b> :432 · <b>saveDraft()</b> :566 · <b>cancelAutomation()</b> :516 · entrypoints/<b>content/index.js</b> → <b>runAutomation()</b> :318 · <b>loadQueue()</b> :62 · <b>processItem()</b> :76</p>
     <p>
       The sidepanel starts one of two run modes — <strong>Publish</strong> or <strong>Save Draft</strong> —
       by writing the per-run queue and an <code class="font-mono text-[13px]">automation_state</code> into
@@ -521,6 +521,8 @@
       The run mode is carried <strong>explicitly</strong> — first in the <code class="font-mono text-[12px]">START_AUTOMATION</code> message, with <code class="font-mono text-[12px]">storage.local</code> as fallback when a reload resumes. It is <em>never re-derived</em> mid-run, so a stale key can't flip a draft run into a publish.
       <br><br>
       Photos that fail to fetch (e.g. a CORS-blocked bucket) fall back to a locally-drawn placeholder image, so every slot still uploads and the listing can be published for review.
+      <br><br>
+      DealerCore vehicle photo URLs are <strong>time-limited</strong> (signed) — data pulled at 10:00 can show <em>Image unavailable</em> hours later once the signature expires. So <b>syncFromDealerCore()</b> :236 re-pulls the inventory (<a href="#automation-dexie">fresh image URLs</a>) on a successful auth (via <b>applySession()</b> :178, so a freshly-opened panel always has a current copy) and, when the stored copy is stale, before a run (<b>startAutomation()</b> :432). Two safeguards keep a refresh from ever blocking Publish: concurrent syncs are <strong>de-duplicated</strong> into one shared promise, and the pre-run refresh is <strong>bounded by a timeout</strong> (a rate-limited 429 backoff used to stall the run for minutes with no feedback — it now simply proceeds with the stored copy). A failed quiet refresh only logs.
     </div>
 
     <h3 id="automation-publish" class="anchor">Publish</h3>
@@ -543,7 +545,7 @@
     </p>
 
     <h3 id="automation-save-draft" class="anchor">Save Draft</h3>
-    <p class="fileref">entrypoints/<b>content/index.js</b> → <b>clickSaveDraft()</b> :260 · entrypoints/sidepanel/<b>Sidepanel.jsx</b> → <b>saveDraft()</b> :493</p>
+    <p class="fileref">entrypoints/<b>content/index.js</b> → <b>clickSaveDraft()</b> :297 · entrypoints/sidepanel/<b>Sidepanel.jsx</b> → <b>saveDraft()</b> :566</p>
     <p>
       Draft mode runs the same form-filling but, instead of <strong>Next → Publish</strong>, clicks the
       <code class="font-mono text-[12px]">div[aria-label="Save Draft"]</code> button directly from the form screen —
@@ -585,7 +587,7 @@
     </p>
 
     <h3 id="automation-sync-badges" class="anchor">Sync badges &amp; Retry</h3>
-    <p class="fileref">entrypoints/sidepanel/pages/<b>Listing.jsx</b> → <b>buildVehicles()</b> :53 · entrypoints/sidepanel/<b>Sidepanel.jsx</b> → <b>retryVehicle()</b> :503</p>
+    <p class="fileref">entrypoints/sidepanel/pages/<b>Listing.jsx</b> → <b>buildVehicles()</b> :53 · entrypoints/sidepanel/<b>Sidepanel.jsx</b> → <b>retryVehicle()</b> :573</p>
     <p>Every vehicle card shows a sync badge derived from the server flags and the write-back outcome:</p>
     <ul>
       <li><strong>Synced</strong> — the server row carries <code class="font-mono text-[12px]">facebook.post_id</code> and <code class="font-mono text-[12px]">timestamps.last_synced_at</code>.</li>

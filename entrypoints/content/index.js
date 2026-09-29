@@ -474,6 +474,14 @@ export default defineContentScript({
                         mode,
                     );
                     sendResponse({ status: "Complete" });
+                } else {
+                    // Nothing to process (queue empty or ids not in Dexie). Mark
+                    // the phase complete so the panel's run poll unlocks instead
+                    // of leaving Publish stuck on "Cancel".
+                    console.warn('START_AUTOMATION received but the queue is empty.');
+                    await browser.storage.local.remove(['runQueueIds', 'currentIndex']);
+                    await setPhase('complete', { finishedAt: Date.now() });
+                    sendResponse({ status: "Empty" });
                 }
             }
             return true;

@@ -31,6 +31,31 @@ const TARGET_URL = "https://www.facebook.com/marketplace/create/vehicle";
 // connecting state is held for at least this long to stay perceivable.
 const MIN_CONNECTING_MS = 450;
 
+// Inventory freshness. DealerCore photo URLs are time-limited, but syncing the
+// whole fleet on every publish is needlessly expensive and — worse — can block
+// the run behind the API's 429 backoff. A completed sync is trusted for this
+// window; outside it, a run refreshes first.
+const INVENTORY_FRESH_MS = 20 * 60 * 1000;
+
+// Hard ceiling on the pre-run refresh so a rate-limited or hung sync can never
+// make the Publish button look dead. On timeout the run proceeds with whatever
+// is already stored.
+const PRE_RUN_REFRESH_TIMEOUT_MS = 10 * 1000;
+
+// Module-scoped sync bookkeeping (one sidepanel document). `inventorySyncInFlight`
+// de-dupes concurrent syncs so a connect-time sync and the pre-run sync can't
+// stack request bursts against the API's 120 req/min limit.
+let lastInventorySyncAt = 0;
+let inventorySyncInFlight = null;
+
+const withTimeout = (promise, ms) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("inventory refresh timed out")), ms),
+    ),
+  ]);
+
 const Sidepanel = () => {
   const [results, setResults] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -160,6 +185,10 @@ const Sidepanel = () => {
       branches: result.me?.branches ?? [],
     });
     setIsConnected(true);
+    // Fresh copy of the inventory on every successful auth: vehicle/photo
+    // URLs can be time-limited, so data pulled hours ago may have expired
+    // signature tokens by the time the user starts a run. Quiet on purpose.
+    syncFromDealerCore({ quiet: true }).catch(() => {});
   };
 
   // Silent auto-connect: on open, try the handshake with no user interaction.
@@ -198,44 +227,64 @@ const Sidepanel = () => {
 
   // Pull the full pending list from DealerCore (§5) instead of only whatever
   // the postMessage bridge happened to deliver while the panel was open.
-  // This is what the header's refresh button runs.
+  // Runs on demand (header refresh button, `quiet: false`) and quietly on
+  // successful auth (connect-time) and at the start of every automation run,
+  // so stored vehicle/photo URLs are always freshly signed.
   const [syncing, setSyncing] = useState(false);
   const [syncMeta, setSyncMeta] = useState(null);
 
-  const syncFromDealerCore = useCallback(async () => {
+  const syncFromDealerCore = useCallback(async ({ quiet = false } = {}) => {
+    // De-dupe: never fire two full-fleet syncs at once. A caller that arrives
+    // while one is running simply awaits the same promise.
+    if (inventorySyncInFlight) return inventorySyncInFlight;
+
     setSyncing(true);
-    try {
-      const vehicleData = await fetchAllVehicles();
-      const { vehicles, meta, truncated } = vehicleData;
+    inventorySyncInFlight = (async () => {
+      try {
+        const vehicleData = await fetchAllVehicles();
+        const { vehicles, meta, truncated } = vehicleData;
 
-      let added = 0;
-      let updated = 0;
-      if (Array.isArray(vehicles) && vehicles.length > 0) {
-        const response = await browser.runtime.sendMessage({
-          type: "SYNC_VEHICLES",
-          payload: vehicles,
-        });
-        if (!response?.success) {
-          throw new Error(response?.error || "Local vehicle sync failed");
+        let added = 0;
+        let updated = 0;
+        if (Array.isArray(vehicles) && vehicles.length > 0) {
+          const response = await browser.runtime.sendMessage({
+            type: "SYNC_VEHICLES",
+            payload: vehicles,
+          });
+          if (!response?.success) {
+            throw new Error(response?.error || "Local vehicle sync failed");
+          }
+          added = response.added || 0;
+          updated = response.updated || 0;
         }
-        added = response.added || 0;
-        updated = response.updated || 0;
-      }
 
-      setSyncMeta(meta);
-      const bits = [`${added} new`, `${updated} updated`];
-      if (truncated) bits.push("list truncated");
-      toast.success(`Synced from DealerCore — ${bits.join(", ")}`);
-    } catch (e) {
-      if (e?.rateLimited) toast.error(e.message);
-      else if (e?.unauthenticated) {
-        toast.error("DealerCore session expired. Reconnect to keep syncing.");
-      } else {
-        toast.error(e?.message || "Sync from DealerCore failed");
+        // Only stamp freshness after a genuinely successful pull.
+        lastInventorySyncAt = Date.now();
+        setSyncMeta(meta);
+        if (!quiet) {
+          const bits = [`${added} new`, `${updated} updated`];
+          if (truncated) bits.push("list truncated");
+          toast.success(`Synced from DealerCore — ${bits.join(", ")}`);
+        }
+      } catch (e) {
+        // Quiet paths (auto-sync on connect, pre-run refresh) log instead of
+        // toasting — a failed refresh must never block the run from starting.
+        if (quiet) {
+          console.warn("DealerCore sync skipped:", e?.message || e);
+        } else if (e?.rateLimited) {
+          toast.error(e.message);
+        } else if (e?.unauthenticated) {
+          toast.error("DealerCore session expired. Reconnect to keep syncing.");
+        } else {
+          toast.error(e?.message || "Sync from DealerCore failed");
+        }
+      } finally {
+        inventorySyncInFlight = null;
+        setSyncing(false);
       }
-    } finally {
-      setSyncing(false);
-    }
+    })();
+
+    return inventorySyncInFlight;
   }, []);
 
   const handleRefresh = useCallback(async () => {
@@ -388,6 +437,25 @@ const Sidepanel = () => {
     if (!selectedItems.length) {
       toast.error("Select at least one vehicle");
       return;
+    }
+
+    // Cheap idempotency guard: only refresh when the stored copy is stale AND
+    // no sync is already running. Syncing here is what keeps DealerCore's
+    // time-limited photo URLs valid for the queue, but it must never block the
+    // run — the API's 429 backoff can stall for minutes, which made Publish
+    // look completely dead. Bounded, and skipped entirely when fresh.
+    const stale = Date.now() - lastInventorySyncAt > INVENTORY_FRESH_MS;
+    if (stale && !inventorySyncInFlight) {
+      toast.loading("Refreshing inventory…", { id: "pre-run-sync" });
+      try {
+        await withTimeout(
+          syncFromDealerCore({ quiet: true }),
+          PRE_RUN_REFRESH_TIMEOUT_MS,
+        );
+      } catch {
+        /* timed out — proceed with the stored copy */
+      }
+      toast.dismiss("pre-run-sync");
     }
 
     // The vehicle data already lives in Dexie; storage only carries the
