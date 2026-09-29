@@ -3,6 +3,44 @@ import { typeLikeHuman } from "./input-simulation";
 import { sleep } from "./sleep";
 import { browser } from "wxt/browser";
 
+// Collect only the options that are actually visible and enabled right now.
+// FB keeps closed/hidden menus in the DOM (`aria-hidden`, `[hidden]`, disabled
+// rows), so a naive `[role="option"]` query can surface a stale duplicate that
+// `.click()` silently ignores while the real option is skipped.
+const collectVisibleOptions = () => {
+    return Array.from(document.querySelectorAll('[role="option"]')).filter((opt) => {
+        if (opt.getAttribute('aria-hidden') === 'true') return false;
+        if (opt.hasAttribute('hidden')) return false;
+        if (opt.closest('[aria-hidden="true"]')) return false;
+        if (opt.getAttribute('aria-disabled') === 'true') return false;
+        return true;
+    });
+};
+
+// Match the target option, preferring an exact trimmed-text match and falling
+// back to a case-insensitive substring (so "Petrol" still matches
+// "Petrol / Electric" style rows).
+const findOption = (options, optionText) => {
+    const value = optionText ? String(optionText).trim() : '';
+    if (!value) return null;
+    const q = value.toLowerCase();
+    return (
+        options.find((opt) => opt.textContent.trim().toLowerCase() === q) ||
+        options.find((opt) => opt.textContent.toLowerCase().includes(q))
+    );
+};
+
+// FB's combobox rows often select on mousedown, and rows inside the menu's
+// max-height scroller must be brought into view before they will accept input.
+// Mirror the sequence the location autosuggest already uses successfully.
+const clickOption = (opt) => {
+    opt.scrollIntoView({ block: 'nearest' });
+    opt.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true, view: window }));
+    opt.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+    opt.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+    opt.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+};
+
 // Handle Facebook's custom Dropdowns
 export const handleDropdown = async (labelName, optionText, shouldAbort) => {
     if (shouldAbort?.()) return;
@@ -10,32 +48,47 @@ export const handleDropdown = async (labelName, optionText, shouldAbort) => {
     if (!label) return console.log(`Skipping ${labelName}: Field not found.`);
 
     label.click();
-    await sleep(800); // Wait for menu
+    // Menu mounting is async, so never trust a single snapshot — poll a
+    // short window re-querying the menu until the target (or "Other") shows.
+    let options = collectVisibleOptions();
+    let target = findOption(options, optionText);
+    const other = (opts) =>
+        opts.find((opt) => {
+            const text = opt.textContent.trim().toLowerCase();
+            return text === 'other' || text.startsWith('other ');
+        });
+    let otherOption = other(options);
+    const hasValue = Boolean(optionText && String(optionText).trim());
+
+    const openedAt = Date.now();
+    const deadline = openedAt + 3000;
+    while (!target && !otherOption && Date.now() < deadline) {
+        if (shouldAbort?.()) return;
+        await sleep(200);
+        options = collectVisibleOptions();
+        target = findOption(options, optionText);
+        otherOption = other(options);
+        // The menu never opened: if nothing has ever rendered after 1.2s, bail
+        // instead of burning the whole window on a field with no options.
+        if (!options.length && Date.now() - openedAt > 1200) break;
+    }
     if (shouldAbort?.()) return;
 
-    const options = Array.from(document.querySelectorAll('[role="option"]'));
-    const value = optionText ? String(optionText) : '';
-    const target = value && options.find(opt =>
-        opt.textContent.toLowerCase().includes(value.toLowerCase())
-    );
-
     if (target) {
-        target.click();
+        console.log(`Selecting "${String(optionText)}" for ${labelName}.`);
+        clickOption(target);
         await sleep(500);
         return;
     }
 
     // No REST-API value, or no matching option in the menu — select "Other"
     // instead of leaving the dropdown untouched.
-    if (shouldAbort?.()) return;
-    const other = options.find(opt => {
-        const text = opt.textContent.trim().toLowerCase();
-        return text === 'other' || text.startsWith('other ');
-    });
-    if (other) {
-        console.log(`No "${value}" option for ${labelName} — selecting "Other".`);
-        other.click();
+    if (otherOption) {
+        console.log(`No "${optionText || ''}" option for ${labelName} — selecting "Other".`);
+        clickOption(otherOption);
         await sleep(500);
+    } else if (hasValue) {
+        console.log(`No matching "${optionText}" option for ${labelName}.`);
     }
 };
 
