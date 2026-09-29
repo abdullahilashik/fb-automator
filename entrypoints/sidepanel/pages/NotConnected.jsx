@@ -21,6 +21,7 @@ const NotConnected = ({
   onLogout,
   onRefresh,
   onOpenSettings,
+  onBugPage,
   status = "idle",
   message = "",
   onConnect,
@@ -40,6 +41,7 @@ const NotConnected = ({
         onLogout={onLogout}
         onRefresh={onRefresh}
         onOpenSettings={onOpenSettings}
+        onBugPage={onBugPage}
       />
 
       <main className="flex-1 overflow-y-auto custom-scrollbar flex items-center justify-center p-5">

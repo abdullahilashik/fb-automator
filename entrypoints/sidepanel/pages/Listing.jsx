@@ -50,8 +50,15 @@ const FALLBACK_IMAGE =
     '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120"><rect width="200" height="120" fill="#f3f4f6"/><text x="50%" y="50%" fill="#9ca3af" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">No photo</text></svg>'
   );
 
-export function buildVehicles(items, results, currentIndex, running) {
-  return items.map((item, index) => {
+export function buildVehicles(items, results, currentIndex, running, runQueueIds = []) {
+  // `currentIndex` indexes the run queue, not the full list, so resolve the
+  // item currently being processed by its id. Otherwise a subset selection
+  // highlights whichever card happens to sit at that index in the full list.
+  const queue = Array.isArray(runQueueIds) ? runQueueIds : [];
+  const processingId =
+    queue.length > 0 ? queue[currentIndex] : items[currentIndex]?.id;
+
+  return items.map((item) => {
     const res = (results || []).find((r) => r.id === item.id);
     let status = "default";
     let progress = 0;
@@ -83,7 +90,7 @@ export function buildVehicles(items, results, currentIndex, running) {
         status = "error";
         progress = 95;
       }
-    } else if (running && index === currentIndex) {
+    } else if (running && item.id === processingId) {
       status = "processing";
       progress = 50;
     }
@@ -120,6 +127,7 @@ const Listing = ({
   onLogout,
   onRefresh,
   onOpenSettings,
+  onBugPage,
   onToggleCar,
   onToggleAll,
   onClearSelection,
@@ -140,6 +148,7 @@ const Listing = ({
       onLogout={onLogout}
       onRefresh={onRefresh}
       onOpenSettings={onOpenSettings}
+      onBugPage={onBugPage}
     />
 
     <div className="flex-1 overflow-y-auto custom-scrollbar p-5">
