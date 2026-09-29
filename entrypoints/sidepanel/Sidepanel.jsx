@@ -59,6 +59,10 @@ const withTimeout = (promise, ms) =>
 const Sidepanel = () => {
   const [results, setResults] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  // The ordered ids of the current run. `currentIndex` indexes into THIS list,
+  // not the full vehicle list — so progress must be resolved by id, otherwise a
+  // subset selection highlights the wrong card.
+  const [runQueueIds, setRunQueueIds] = useState([]);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [running, setRunning] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -87,8 +91,8 @@ const Sidepanel = () => {
   }, [rawVehicles]);
 
   const vehicles = useMemo(
-    () => buildVehicles(items, results, currentIndex, running),
-    [items, results, currentIndex, running],
+    () => buildVehicles(items, results, currentIndex, running, runQueueIds),
+    [items, results, currentIndex, running, runQueueIds],
   );
 
   // Auto-select all once when a list is first shown and the user hasn't
@@ -128,6 +132,7 @@ const Sidepanel = () => {
 
       setResults(storedResults);
       setCurrentIndex(storedIndex);
+      setRunQueueIds(Array.isArray(data.runQueueIds) ? data.runQueueIds : []);
       if (storedSelected.size) setSelectedIds(storedSelected);
       if (data.auth) setAuth(data.auth);
       else if (data.dealercore_session?.user) setAuth(data.dealercore_session);
@@ -314,6 +319,8 @@ const Sidepanel = () => {
       if (data.currentIndex !== undefined) {
         setCurrentIndex(data.currentIndex);
       }
+      // Keep the queue in sync so the processing highlight tracks the right card.
+      setRunQueueIds(Array.isArray(data.runQueueIds) ? data.runQueueIds : []);
       // The run queue is cleared on cancel/complete, so treat that and the
       // phase as authoritative for stopping the "running" state.
       if (!data.runQueueIds) {
@@ -460,8 +467,9 @@ const Sidepanel = () => {
 
     // The vehicle data already lives in Dexie; storage only carries the
     // per-run queue (which vehicle ids, progress, and results).
+    const queueIds = selectedItems.map((it) => it.id);
     await browser.storage.local.set({
-      runQueueIds: selectedItems.map((it) => it.id),
+      runQueueIds: queueIds,
       currentIndex: 0,
       results: [],
       // Fresh run clears any previous cancel request; `mode` decides whether
@@ -474,11 +482,11 @@ const Sidepanel = () => {
     });
     setCancelling(false);
 
-    const itemIds = new Set(selectedItems.map((it) => it.id));
     setResults([]);
     setCurrentIndex(0);
+    setRunQueueIds(queueIds);
     setRunning(true);
-    setSelectedIds(itemIds);
+    setSelectedIds(new Set(queueIds));
 
     const [tab] = await browser.tabs.query({
       active: true,

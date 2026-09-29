@@ -517,6 +517,12 @@
       <li><code class="font-mono text-[12px]">currentIndex</code> / <code class="font-mono text-[12px]">results</code> are saved after every item so a reload resumes mid-run. A user cancel sets <code class="font-mono text-[12px]">cancelRequested</code>, mirrored into a module flag by <b>initCancelWatcher()</b> :31 so the hot loops bail synchronously.</li>
       <li>On completion the queue is cleared, <code class="font-mono text-[12px]">automation_state.phase</code> becomes <code class="font-mono text-[12px]">complete</code>, and <b>generateCSV()</b> :157 exports the results. Results are intentionally kept after the run.</li>
     </ol>
+    <p>
+      The Listing page renders run progress by resolving <code class="font-mono text-[12px]">currentIndex</code>
+      through the stored run queue ids (<code class="font-mono text-[12px]">runQueueIds</code>) and matching on
+      <strong>vehicle id</strong> — not by a card's position in the full list — so publishing a subset (or a single
+      re-queued vehicle) highlights the correct card.
+    </p>
     <div class="rounded-lg border border-slate-200 p-4 bg-slate-50 text-[12.5px] leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-400">
       The run mode is carried <strong>explicitly</strong> — first in the <code class="font-mono text-[12px]">START_AUTOMATION</code> message, with <code class="font-mono text-[12px]">storage.local</code> as fallback when a reload resumes. It is <em>never re-derived</em> mid-run, so a stale key can't flip a draft run into a publish.
       <br><br>
