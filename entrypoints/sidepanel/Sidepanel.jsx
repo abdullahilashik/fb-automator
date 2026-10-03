@@ -56,6 +56,34 @@ const withTimeout = (promise, ms) =>
     ),
   ]);
 
+// Ask the extension for host access to the image origins a run will download.
+// Must be called inside a click handler: Firefox rejects `permissions.request`
+// outside a user gesture. Origins already covered by the static host_permissions
+// (facebook, dealercore, AWS S3/CloudFront) resolve without a prompt; a custom
+// CDN prompts once and is remembered. Failures are non-fatal — the content
+// script then falls back to a placeholder image.
+async function requestImageHostAccess(items) {
+  const origins = new Set();
+  for (const item of items) {
+    for (const raw of item.imageUrls || []) {
+      try {
+        const { protocol, origin } = new URL(raw);
+        if (protocol === "http:" || protocol === "https:") {
+          origins.add(`${origin}/*`);
+        }
+      } catch {
+        /* ignore malformed image urls */
+      }
+    }
+  }
+  if (origins.size === 0) return;
+  try {
+    await browser.permissions.request({ origins: [...origins] });
+  } catch (e) {
+    console.warn("Image host permission request failed:", e?.message || e);
+  }
+}
+
 const Sidepanel = () => {
   const [results, setResults] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -486,6 +514,10 @@ const Sidepanel = () => {
       toast.error("Select at least one vehicle");
       return;
     }
+
+    // Grab image-host access while we're still inside the click's user gesture
+    // (Firefox requires it) so the content script can download the S3 photos.
+    await requestImageHostAccess(selectedItems);
 
     // Cheap idempotency guard: only refresh when the stored copy is stale AND
     // no sync is already running. Syncing here is what keeps DealerCore's
