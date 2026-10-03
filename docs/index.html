@@ -420,7 +420,7 @@
           <tr>
             <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">wxt.config.ts</td>
             <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Manifest: permissions and host patterns.</td>
-            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">permissions <span class="text-slate-400">:11</span> · host_permissions <span class="text-slate-400">:12</span> · optional_host_permissions <span class="text-slate-400">:23</span></td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">permissions <span class="text-slate-400">:11</span> · host_permissions <span class="text-slate-400">:12</span> · optional_host_permissions <span class="text-slate-400">:36</span></td>
           </tr>
           <tr>
             <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">auth-guide.md</td>
@@ -533,7 +533,7 @@
     <div class="rounded-lg border border-slate-200 p-4 bg-slate-50 text-[12.5px] leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-400">
       The run mode is carried <strong>explicitly</strong> — first in the <code class="font-mono text-[12px]">START_AUTOMATION</code> message, with <code class="font-mono text-[12px]">storage.local</code> as fallback when a reload resumes. It is <em>never re-derived</em> mid-run, so a stale key can't flip a draft run into a publish.
       <br><br>
-      Photos that fail to fetch (e.g. a CORS-blocked bucket) fall back to a locally-drawn placeholder image, so every slot still uploads and the listing can be published for review.
+      Photos are downloaded with a host permission so a CORS-blocked bucket still uploads: AWS S3 and CloudFront are granted statically, and any other image CDN is requested once when <strong>Publish</strong> is clicked (a user gesture — Firefox rejects the prompt otherwise). Only if every fetch path fails does the slot fall back to a locally-drawn placeholder, so at least the listing can still be published for review.
       <br><br>
       DealerCore vehicle photo URLs are <strong>time-limited</strong> (signed) — data pulled at 10:00 can show <em>Image unavailable</em> hours later once the signature expires. So <b>syncFromDealerCore()</b> :236 re-pulls the inventory (<a href="#automation-dexie">fresh image URLs</a>) on a successful auth (via <b>applySession()</b> :178, so a freshly-opened panel always has a current copy) and, when the stored copy is stale, before a run (<b>startAutomation()</b> :432). Two safeguards keep a refresh from ever blocking Publish: concurrent syncs are <strong>de-duplicated</strong> into one shared promise, and the pre-run refresh is <strong>bounded by a timeout</strong> (a rate-limited 429 backoff used to stall the run for minutes with no feedback — it now simply proceeds with the stored copy). A failed quiet refresh only logs.
     </div>
@@ -1237,7 +1237,7 @@ npx wxt</code></pre>
     </div>
 
     <h2 id="manifest" class="anchor">Manifest &amp; permissions</h2>
-    <p class="fileref"><b>wxt.config.ts</b> :11–18 · content-script matches in entrypoints/<b>dealercore-bridge.content.js</b> :95</p>
+    <p class="fileref"><b>wxt.config.ts</b> :11–36 · content-script matches in entrypoints/<b>dealercore-bridge.content.js</b> :95</p>
     <p>Four permissions are load-bearing. Each maps to a specific requirement.</p>
     <div class="mt-4 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
       <table class="min-w-full text-left text-sm">
@@ -1252,7 +1252,7 @@ npx wxt</code></pre>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">storage</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Token and session persistence.</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">scripting</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Re-injects the bridge when a tab loads before the script is ready.</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">cookies</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Session inspection for the handshake.</td></tr>
-          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">host_permissions</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">DealerCore origins for the bridge, plus Facebook for automation.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">host_permissions</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">DealerCore origins for the bridge, Facebook for automation, and <code class="font-mono text-[12px]">*.amazonaws.com</code> / <code class="font-mono text-[12px]">*.cloudfront.net</code> so vehicle photos download despite bucket CORS. Any other image CDN is requested on demand.</td></tr>
         </tbody>
       </table>
     </div>
@@ -1284,6 +1284,10 @@ npx wxt</code></pre>
       <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <p class="text-sm font-semibold text-slate-900 dark:text-white">Works in dev, breaks in prod</p>
         <p class="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">Tokens are per-origin, so both can be connected at once. Verify which base URL is active via <code class="font-mono">dealercore_base_url</code>.</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <p class="text-sm font-semibold text-slate-900 dark:text-white">Facebook shows <em>Image Unavailable</em> (Firefox)</p>
+        <p class="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">The photo origin is missing from the extension's host permissions, so the content script uploaded the placeholder instead. AWS S3 and CloudFront are granted statically; any other CDN is requested when you click <strong>Publish</strong> (approve the prompt once). Auto runs need that grant to already exist.</p>
       </div>
     </div>
 
