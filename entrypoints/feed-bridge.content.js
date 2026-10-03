@@ -56,13 +56,16 @@ async function handleFeedMessage(rawItems) {
 
   const rows = incoming.map(toDealerCoreVehicle).filter(Boolean);
   let added = 0;
+  let ids = [];
   if (rows.length) {
     const res = await browser.runtime.sendMessage({ type: 'SYNC_VEHICLES', payload: rows });
     if (!res?.success) throw new Error(res?.error || 'Local vehicle sync failed');
     added = res.added ?? rows.length;
     total += res.count ?? rows.length;
+    // Background assigns ids to synthetic payloads, so prefer its list.
+    ids = Array.isArray(res.ids) ? res.ids : rows.map((r) => r.id);
   }
-  return { ok: true, added, total };
+  return { ok: true, added, total, ids };
 }
 
 export default defineContentScript({
@@ -82,6 +85,13 @@ export default defineContentScript({
 
       try {
         const result = await handleFeedMessage(data.items ?? data.payload);
+        // Publication Automation: a verified feed batch is a postMessage event
+        // too, so let the background decide whether to auto-publish it.
+        if (result.ok && Array.isArray(result.ids) && result.ids.length) {
+          browser.runtime
+            .sendMessage({ type: 'AUTO_PUBLISH', ids: result.ids })
+            .catch(() => {});
+        }
         // Ack back to the page so index.html can show "appended N items".
         window.postMessage(
           {

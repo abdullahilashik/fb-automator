@@ -46,38 +46,46 @@ const testData = [
 ];
 
 const Popup = () => {
-  const startAutomation = () => {
+  const startAutomation = async () => {
     // 1. Seed the Dexie worklist with the sample data (extension-origin page,
     // so the IndexedDB is reachable directly), then hand over the run queue.
     const rows = testData.map(toDealerCoreVehicle).filter(Boolean);
-    db.vehicles.bulkPut(rows).then(() => {
-      browser.storage.local.set({
-        runQueueIds: testData.map((d) => d.id),
-        currentIndex: 0,
-        results: [],
-        automation_state: {
-          phase: "running",
-          cancelRequested: false,
-          mode: "publish",
-        },
-      });
-      browser.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const tab = tabs[0];
-        const targetUrl = "https://www.facebook.com/marketplace/create/vehicle";
-
-        if (tab.url.startsWith("https://www.facebook.com/marketplace/create/")) {
-            // Already on the right page, send message to trigger runAutomation()
-            browser.tabs.sendMessage(tab.id, {
-              action: "START_AUTOMATION",
-              mode: "publish",
-            });
-        } else {
-            // Navigate to the creation page
-            browser.tabs.update(tab.id, { url: targetUrl });
-        }
-        window.close(); // Close popup
-      });
+    await db.vehicles.bulkPut(rows);
+    await browser.storage.local.set({
+      runQueueIds: testData.map((d) => d.id),
+      currentIndex: 0,
+      results: [],
+      automation_state: {
+        phase: "running",
+        cancelRequested: false,
+        mode: "publish",
+      },
     });
+
+    // Promise form only — callbacks are unavailable on Firefox's native
+    // promise-based `browser` API and throw there.
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (!tab) {
+      window.close();
+      return;
+    }
+    const targetUrl = "https://www.facebook.com/marketplace/create/vehicle";
+
+    if (tab.url?.startsWith("https://www.facebook.com/marketplace/create/")) {
+      // Already on the right page, send message to trigger runAutomation()
+      try {
+        await browser.tabs.sendMessage(tab.id, {
+          action: "START_AUTOMATION",
+          mode: "publish",
+        });
+      } catch {
+        await browser.tabs.update(tab.id, { url: targetUrl });
+      }
+    } else {
+      // Navigate to the creation page
+      await browser.tabs.update(tab.id, { url: targetUrl });
+    }
+    window.close(); // Close popup
   };
 
   return (

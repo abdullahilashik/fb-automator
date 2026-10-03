@@ -1,5 +1,5 @@
 import React from "react";
-import { Loader2, Send, XCircle } from "lucide-react";
+import { Loader2, Send, XCircle, X } from "lucide-react";
 import Header from "../_components/Header";
 
 const STATUS_STYLES = {
@@ -136,6 +136,7 @@ const Listing = ({
   cancelling,
   onSaveDraft,
   onRetry,
+  onDelete,
 }) => (
   <div className="h-full w-full bg-white dark:bg-gray-900 flex flex-col overflow-hidden shadow-xl">
     <Header
@@ -205,23 +206,37 @@ const Listing = ({
                     />
 
                     <div className="flex-1 min-w-0 relative">
-                      <div className="flex justify-between items-start">
+                      <div className="flex justify-between items-start gap-1">
                         <h3 className="text-[12px] font-bold text-gray-900 dark:text-gray-100 truncate">{car.name}</h3>
-                        {car.status === "error" && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          {car.status === "error" && (
+                            <button
+                              title="Retry this vehicle"
+                              aria-label={`Retry ${car.name}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onRetry(car.id);
+                              }}
+                              className="text-red-400 hover:text-red-600 p-1 bg-white dark:bg-gray-800 rounded-full shadow-sm"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                            </button>
+                          )}
                           <button
-                            title="Retry this vehicle"
-                            aria-label={`Retry ${car.name}`}
+                            title="Remove this vehicle"
+                            aria-label={`Remove ${car.name}`}
                             onClick={(e) => {
                               e.stopPropagation();
-                              onRetry(car.id);
+                              onDelete(car.id);
                             }}
-                            className="text-red-400 hover:text-red-600 p-1 bg-white dark:bg-gray-800 rounded-full shadow-sm"
+                            disabled={running}
+                            className="text-gray-400 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed p-1 bg-white dark:bg-gray-800 rounded-full shadow-sm"
                           >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
+                            <X className="w-3 h-3" />
                           </button>
-                        )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {car.syncBadge && (
@@ -307,7 +322,7 @@ const Listing = ({
           </button>
         ) : (
           <button
-            onClick={onStartAutomation}
+            onClick={() => onStartAutomation("publish")}
             disabled={selectedCount === 0}
             className="text-sm w-full bg-[#00a2e8] hover:bg-[#008bc9] text-white font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-40"
           >
@@ -318,7 +333,7 @@ const Listing = ({
         <button
           onClick={onSaveDraft}
           disabled={selectedCount === 0}
-          className="text-sm w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-semibold py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all disabled:opacity-40"
+          className="text-sm w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-semibold py-2 rounded-lg flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-700 transition-all disabled:opacity-40"
         >
           Save as draft
         </button>

@@ -82,7 +82,7 @@ async function ingestStockEvent(vehicle) {
       type: 'SAVE_SINGLE_VEHICLE',
       payload: vehicle,
     });
-    return { ok: response?.success ?? false, error: response?.error };
+    return { ok: response?.success ?? false, error: response?.error, id: response?.id };
   } catch (err) {
     return { ok: false, error: String(err) };
   }
@@ -126,7 +126,14 @@ export default defineContentScript({
       if (!data || data.source !== DC_MESSAGE_SOURCE) return;
       if (data.type !== DC_MESSAGE_TYPE) return;
       try {
-        await ingestStockEvent(data.payload);
+        const result = await ingestStockEvent(data.payload);
+        // Publication Automation: let the background start the run when the
+        // sidepanel is closed and the user chose "Publish immediately".
+        if (result.ok && result.id != null) {
+          browser.runtime
+            .sendMessage({ type: 'AUTO_PUBLISH', ids: [result.id] })
+            .catch(() => {});
+        }
       } catch (err) {
         console.error('[dealercore] STOCK_FOR_ADVERTISING ingest failed:', err);
       }
