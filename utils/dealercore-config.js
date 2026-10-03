@@ -28,9 +28,21 @@ export const DEALERCORE_HOSTS = {
   testSuffix: '.test',
 };
 
+export function isLoopbackHostname(hostname) {
+  if (!hostname) return false;
+  // `localhost` frequently resolves to ::1 on Windows while a dev server binds
+  // IPv4-only, so every spelling must be recognised.
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '::1' ||
+    hostname === '[::1]'
+  );
+}
+
 export function isDealerCoreHostname(hostname) {
   if (!hostname) return false;
-  if (hostname === 'localhost') return true;
+  if (isLoopbackHostname(hostname)) return true;
   if (hostname.endsWith('.test')) return true;
   if (hostname === DEALERCORE_HOSTS.prod) return true;
   if (hostname.endsWith(`.${DEALERCORE_HOSTS.prod}`)) return true;

@@ -336,6 +336,43 @@ const Sidepanel = () => {
     return () => clearInterval(timer);
   }, [running]);
 
+  // Adopt runs started outside this panel (auto-publish writes storage directly,
+  // possibly while the sidepanel was closed) and surface skip notices.
+  useEffect(() => {
+    const listener = (changes, area) => {
+      if (area !== "local") return;
+
+      if ("runQueueIds" in changes) {
+        const queue = changes.runQueueIds.newValue;
+        setRunQueueIds(Array.isArray(queue) ? queue : []);
+        if (!Array.isArray(queue) || queue.length === 0) setRunning(false);
+      }
+      if ("currentIndex" in changes) {
+        setCurrentIndex(changes.currentIndex.newValue || 0);
+      }
+      if ("results" in changes && Array.isArray(changes.results.newValue)) {
+        setResults(changes.results.newValue);
+      }
+      if (changes.automation_state) {
+        const phase = changes.automation_state.newValue?.phase;
+        if (phase === "running") setRunning(true);
+        else if (phase === "complete" || phase === "cancelled") setRunning(false);
+      }
+      if (changes.automation_notice?.newValue) {
+        const notice = changes.automation_notice.newValue;
+        if (notice?.message) toast.error(`Auto-publish skipped: ${notice.message}`);
+        browser.storage.local.remove("automation_notice");
+        try {
+          browser.action.setBadgeText({ text: "" });
+        } catch {
+          // badge is best-effort
+        }
+      }
+    };
+    browser.storage.onChanged.addListener(listener);
+    return () => browser.storage.onChanged.removeListener(listener);
+  }, []);
+
   useEffect(() => {
     browser.storage.local.set({ selectedIds: Array.from(selectedIds) });
   }, [selectedIds]);
@@ -437,6 +474,10 @@ const Sidepanel = () => {
   const selectedCount = vehicles.filter((v) => selectedIds.has(v.id)).length;
 
   const startAutomation = async (mode = "publish", idsOverride = null) => {
+    // A bare onClick handler passes the PointerEvent in as `mode`; only 'draft'
+    // is a meaningful non-default mode, so coerce everything else to publish.
+    const runMode = mode === "draft" ? "draft" : "publish";
+
     // Retry passes an explicit single-vehicle set; a normal run uses the UI
     // selection. Either way the queue comes from Dexie's master list.
     const targetIds = idsOverride instanceof Set ? idsOverride : selectedIds;
@@ -477,7 +518,7 @@ const Sidepanel = () => {
       automation_state: {
         phase: "running",
         cancelRequested: false,
-        mode,
+        mode: runMode,
       },
     });
     setCancelling(false);
@@ -501,21 +542,25 @@ const Sidepanel = () => {
       tab.url &&
       tab.url.startsWith("https://www.facebook.com/marketplace/create/")
     ) {
-      browser.tabs.sendMessage(
-        tab.id,
-        { action: "START_AUTOMATION", mode },
-        () => {
-          if (browser.runtime.lastError) {
-            browser.tabs.update(tab.id, { url: TARGET_URL });
-          }
-        },
-      );
+      // Promise form only: the old callback form throws on Firefox, whose
+      // native `browser` API is promise-based — that silently killed every
+      // run there (no navigation, no toast).
+      try {
+        await browser.tabs.sendMessage(tab.id, {
+          action: "START_AUTOMATION",
+          mode: runMode,
+        });
+      } catch {
+        // No content script listening yet (tab predates the extension) —
+        // reloading the page lets the content script's init() resume the run.
+        await browser.tabs.update(tab.id, { url: TARGET_URL });
+      }
     } else {
-      browser.tabs.update(tab.id, { url: TARGET_URL });
+      await browser.tabs.update(tab.id, { url: TARGET_URL });
     }
 
     toast.success(
-      mode === "draft"
+      runMode === "draft"
         ? `Saving ${selectedItems.length} draft(s)`
         : `Publishing ${selectedItems.length} vehicle(s)`,
     );
@@ -581,6 +626,28 @@ const Sidepanel = () => {
   const retryVehicle = async (id) => {
     if (running || cancelling) return;
     await startAutomation("publish", new Set([id]));
+  };
+
+  // Remove a vehicle from the IndexedDB worklist. Local-only: DealerCore keeps
+  // its copy, so a later inventory sync can bring the vehicle back. Disabled
+  // mid-run so it can't pull a queued item out from under the automation.
+  const deleteVehicle = async (id) => {
+    if (running || cancelling) return;
+    try {
+      const res = await browser.runtime.sendMessage({ type: "DELETE_VEHICLE", id });
+      if (!res?.success) throw new Error(res?.error || "Delete failed");
+      setSelectedIds((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setResults((prev) => prev.filter((r) => r.id !== id));
+      setRunQueueIds((prev) => prev.filter((runId) => runId !== id));
+      toast.success("Vehicle removed");
+    } catch (e) {
+      toast.error(e?.message || "Could not remove vehicle");
+    }
   };
 
   // The landing page owns its own progress state, so there is no separate
@@ -664,6 +731,7 @@ const Sidepanel = () => {
           cancelling={cancelling}
           onSaveDraft={saveDraft}
           onRetry={retryVehicle}
+          onDelete={deleteVehicle}
         />
       )}
 

@@ -2,9 +2,17 @@ import { browser } from 'wxt/browser';
 import {
   DEALERCORE_CONFIG,
   isDealerCoreHostname,
+  isLoopbackHostname,
   tokenKeyFor,
   refreshKeyFor,
 } from '@/utils/dealercore-config';
+
+// Loopback origins (localhost / 127.0.0.1) are valid DealerCore dev hosts, but
+// they are also what every unrelated local dev server runs on. Trusting one on
+// sight hijacks the base URL (e.g. a Vite app on :3000), so a loopback origin
+// is only used once a real handshake has proven it answers as DealerCore. This
+// flag records that proof; it is absent for any base adopted by hostname alone.
+const TRUSTED_BASE_KEY = 'dealercore_base_trusted';
 
 export function normalizeBaseUrl(raw) {
   const fallback = DEALERCORE_CONFIG.DEFAULT_DOMAIN;
@@ -16,21 +24,47 @@ export function normalizeBaseUrl(raw) {
   }
 }
 
+function isLoopbackBase(base) {
+  try {
+    return isLoopbackHostname(new URL(base).hostname);
+  } catch {
+    return false;
+  }
+}
+
+async function saveTrustedBase(base) {
+  await browser.storage.local.set({
+    dealercore_base_url: base,
+    [TRUSTED_BASE_KEY]: true,
+  });
+}
+
 export async function getDealerCoreBaseUrl() {
   try {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     if (tab?.url) {
       const url = new URL(tab.url);
-      if (isDealerCoreHostname(url.hostname)) {
-        await browser.storage.local.set({ dealercore_base_url: url.origin });
+      // Strong DealerCore hostnames are adopted immediately. A loopback tab is
+      // deliberately not adopted here: only the bridge, after a verified
+      // handshake, may promote it (see silentHandshake in the bridge script).
+      if (isDealerCoreHostname(url.hostname) && !isLoopbackHostname(url.hostname)) {
+        await saveTrustedBase(url.origin);
         return url.origin;
       }
     }
   } catch {
     // Fall through to cache/default.
   }
-  const stored = await browser.storage.local.get(['dealercore_base_url']);
-  return normalizeBaseUrl(stored.dealercore_base_url);
+  const stored = await browser.storage.local.get(['dealercore_base_url', TRUSTED_BASE_KEY]);
+  const base = normalizeBaseUrl(stored.dealercore_base_url);
+  if (isLoopbackBase(base) && stored[TRUSTED_BASE_KEY] !== true) {
+    // Legacy or unverified loopback value (the old bridge wrote one for any
+    // localhost page before handshaking). Refuse it and fall back to the real
+    // default rather than silently pointing auth at an unrelated app.
+    await browser.storage.local.remove(['dealercore_base_url', TRUSTED_BASE_KEY]);
+    return DEALERCORE_CONFIG.DEFAULT_DOMAIN;
+  }
+  return base;
 }
 
 export async function getAccessToken(baseUrl) {
@@ -140,6 +174,26 @@ export async function probeAuthorize(base, challenge) {
 export function explainProbe(probe) {
   const clientId = DEALERCORE_CONFIG.CLIENT_ID;
   if (probe.status === 0) {
+    // A transport failure on a loopback origin is almost always "nothing is
+    // listening", or an IPv4/IPv6 mismatch (`localhost` → ::1 while the dev
+    // server binds 127.0.0.1). Say so instead of blaming the VPN.
+    let loopback = false;
+    try {
+      const host = new URL(probe.url).hostname;
+      loopback =
+        host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+    } catch {
+      /* non-URL — fall through to the generic message */
+    }
+    if (loopback) {
+      return (
+        `No server is accepting connections at ${probe.url} (${probe.error || 'no response'}). ` +
+        `Start the DealerCore dev server and confirm it is listening on this exact ` +
+        `host/port. On Windows "localhost" often resolves to ::1 while dev servers bind ` +
+        `IPv4-only — if it listens on 127.0.0.1, set the base URL to ` +
+        `http://127.0.0.1:<port> in Settings.`
+      );
+    }
     return `Could not reach ${probe.url} — check VPN/network. (${probe.error || 'no response'})`;
   }
   if (probe.status === 401 || probe.status === 403) {
@@ -429,6 +483,7 @@ async function handshakeFromExtension(base) {
   if (!data?.status || !token) throw new Error('Handshake returned no token.');
   await browser.storage.local.set({
     dealercore_base_url: origin,
+    [TRUSTED_BASE_KEY]: true,
     dealercore_signed_out: false,
     [tokenKeyFor(origin)]: token,
   });
@@ -574,6 +629,7 @@ export async function launchOAuthLogin(base) {
   if (!token) throw new Error('No access token in response.');
   await browser.storage.local.set({
     dealercore_base_url: origin,
+    [TRUSTED_BASE_KEY]: true,
     dealercore_signed_out: false,
     [tokenKeyFor(origin)]: token,
     // Guide §3: Passport returns a refresh token alongside the access token and

@@ -9,14 +9,21 @@ import {
   LogOut,
   Monitor,
   Moon,
+  MousePointerClick,
   PlusCircle,
   RefreshCw,
   ShieldCheck,
   ShoppingBag,
   Sun,
+  Zap,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { verifySession } from "@/utils/dealercore-api";
+import {
+  PUBLICATION_MODE,
+  getPublicationMode,
+  setPublicationMode,
+} from "@/utils/publication-settings";
 
 const scrapeFbProfile = () => {
   const img = document.querySelector(
@@ -68,6 +75,9 @@ const Settings = ({
   });
   const [bugMessage, setBugMessage] = useState("");
   const [checkingDc, setCheckingDc] = useState(false);
+  const [publicationMode, setPublicationModeState] = useState(
+    PUBLICATION_MODE.MANUAL,
+  );
 
   // Auth-method agnostic: handshake connections carry no token on `auth`
   // (the token lives under token_<origin>), so detect on identity, not token.
@@ -121,6 +131,26 @@ const Settings = ({
     checkFacebook();
   }, [checkFacebook]);
 
+  useEffect(() => {
+    getPublicationMode()
+      .then(setPublicationModeState)
+      .catch(() => {});
+  }, []);
+
+  const changePublicationMode = async (mode) => {
+    setPublicationModeState(mode);
+    try {
+      await setPublicationMode(mode);
+      toast.success(
+        mode === PUBLICATION_MODE.AUTO
+          ? "New arrivals will publish automatically"
+          : "New arrivals will wait for the Publish button",
+      );
+    } catch {
+      toast.error("Could not save the publication setting");
+    }
+  };
+
   const checkDealerCore = async () => {
     setCheckingDc(true);
     try {
@@ -151,6 +181,19 @@ const Settings = ({
     { value: "light", label: "Light", Icon: Sun },
     { value: "dark", label: "Dark", Icon: Moon },
     { value: "system", label: "System", Icon: Monitor },
+  ];
+
+  const publicationOptions = [
+    {
+      value: PUBLICATION_MODE.MANUAL,
+      label: "Publish manually",
+      Icon: MousePointerClick,
+    },
+    {
+      value: PUBLICATION_MODE.AUTO,
+      label: "Publish immediately",
+      Icon: Zap,
+    },
   ];
 
   return (
@@ -187,6 +230,32 @@ const Settings = ({
               </button>
             ))}
           </div>
+        </section>
+
+        <section>
+          <h2 className="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">
+            Publication Automation
+          </h2>
+          <div className="grid grid-cols-2 gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
+            {publicationOptions.map(({ value, label, Icon }) => (
+              <button
+                key={value}
+                onClick={() => changePublicationMode(value)}
+                className={`flex items-center justify-center gap-1.5 text-[11px] font-semibold py-2 rounded-lg transition-all ${
+                  publicationMode === value
+                    ? "bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" /> {label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
+            {publicationMode === PUBLICATION_MODE.AUTO
+              ? "Listings start publishing automatically as soon as vehicle data arrives from DealerCore — no Publish click needed."
+              : "Vehicle data arrives in the list; select the items you want and click Publish."}
+          </p>
         </section>
 
         <section>

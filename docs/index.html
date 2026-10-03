@@ -95,6 +95,7 @@
         <li><a href="#storage"             class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Storage &amp; keys</a></li>
         <li><a href="#messages"            class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Message contracts</a></li>
         <li><a href="#automation"          class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Automation</a></li>
+        <li><a href="#automation-auto-publish" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Publication Automation</a></li>
         <li><a href="#automation-publish"  class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Publish</a></li>
         <li><a href="#automation-save-draft" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Save Draft</a></li>
         <li><a href="#automation-writeback" class="navlink block rounded-md px-2.5 py-1.5 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">Write Back API</a></li>
@@ -419,7 +420,7 @@
           <tr>
             <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">wxt.config.ts</td>
             <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Manifest: permissions and host patterns.</td>
-            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">permissions <span class="text-slate-400">:11</span> · host_permissions <span class="text-slate-400">:12</span> · optional_host_permissions <span class="text-slate-400">:19</span></td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">permissions <span class="text-slate-400">:11</span> · host_permissions <span class="text-slate-400">:12</span> · optional_host_permissions <span class="text-slate-400">:23</span></td>
           </tr>
           <tr>
             <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">auth-guide.md</td>
@@ -464,9 +465,13 @@
           <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">token_&lt;origin&gt;</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">The Bearer token, one entry per environment (<code class="font-mono text-[12px]">token_https://dev.dealercore.com.au</code>).</td></tr>
           <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">refresh_&lt;origin&gt;</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Optional OAuth refresh token, per environment. Rotated on every successful refresh; cleared on sign-out.</td></tr>
           <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">runQueueIds</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">The per-run selection (vehicle primary keys). The only run-queue state stored outside Dexie; replaces the old <code class="font-mono text-[12px]">items</code> payload. Cleared on cancel/complete.</td></tr>
-          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">dealercore_base_url</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Active origin. Re-derived from the active tab when that tab is a DealerCore page.</td></tr>
+          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">dealercore_base_url</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Active origin. Re-derived from the active tab when that tab is a DealerCore page. Loopback origins (<code class="font-mono text-[12px]">localhost</code> / <code class="font-mono text-[12px]">127.0.0.1</code>) are adopted only after a verified handshake, so an unrelated local dev server can't hijack it.</td></tr>
+          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">dealercore_base_trusted</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Proof flag set alongside a verified base URL. A stored loopback <code class="font-mono text-[12px]">dealercore_base_url</code> without it is discarded in favour of the default domain.</td></tr>
           <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">dealercore_session</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Cached <code class="font-mono text-[12px]">user / dealer / branch / branches / savedAt</code>. UI convenience only — never used to authorise a request.</td></tr>
           <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">dealercore_signed_out</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Boolean latch. Blocks the automatic handshake after an explicit sign-out.</td></tr>
+          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">publication_automation</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Publication mode: <code class="font-mono text-[12px]">'manual'</code> (default) or <code class="font-mono text-[12px]">'auto'</code>. Absent key reads as <code class="font-mono text-[12px]">'manual'</code>, so existing installs are unchanged.</td></tr>
+          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">pendingAutoPublish</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Vehicle ids that arrived while a run was already in progress. Drained (serially) once the run ends or the worker restarts.</td></tr>
+          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">automation_notice</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Reason an auto-publish batch was skipped (e.g. no DealerCore token / not signed in to Facebook). Surfaces as a sidepanel toast + action badge, then is cleared.</td></tr>
         </tbody>
       </table>
     </div>
@@ -497,6 +502,8 @@
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">UPDATE_SYNC_STATUS</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">content → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Record a §6 write-back outcome per vehicle: <code class="font-mono">outcome: 'synced'</code> merges the server-returned facebook ids + <code class="font-mono">last_synced_at</code> and sets <code class="font-mono">sync_status</code>; <code class="font-mono">'failed'</code> stores the error message.</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">GET_VEHICLES</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">content / sidepanel → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Read the whole Dexie list. How the facebook.com automation and sidepanel load the worklist (content scripts can't reach extension IndexedDB).</td></tr>
           <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">CLEAR_VEHICLES</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">sidepanel → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Empty the Dexie vehicle table.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">DELETE_VEHICLE</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">sidepanel → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Remove one vehicle from the Dexie table by id — the card's <strong>×</strong> button.</td></tr>
+          <tr><td class="px-4 py-3 font-mono text-[12px] text-brand-700 dark:text-brand-300">AUTO_PUBLISH</td><td class="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400">content → background</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">A verified <code class="font-mono">postMessage</code> batch landed in Dexie and carries <code class="font-mono">ids</code>. Only acts when <code class="font-mono">publication_automation === 'auto'</code>; drives the same publish run the sidepanel would, without needing the panel open.</td></tr>
         </tbody>
       </table>
     </div>
@@ -529,6 +536,33 @@
       Photos that fail to fetch (e.g. a CORS-blocked bucket) fall back to a locally-drawn placeholder image, so every slot still uploads and the listing can be published for review.
       <br><br>
       DealerCore vehicle photo URLs are <strong>time-limited</strong> (signed) — data pulled at 10:00 can show <em>Image unavailable</em> hours later once the signature expires. So <b>syncFromDealerCore()</b> :236 re-pulls the inventory (<a href="#automation-dexie">fresh image URLs</a>) on a successful auth (via <b>applySession()</b> :178, so a freshly-opened panel always has a current copy) and, when the stored copy is stale, before a run (<b>startAutomation()</b> :432). Two safeguards keep a refresh from ever blocking Publish: concurrent syncs are <strong>de-duplicated</strong> into one shared promise, and the pre-run refresh is <strong>bounded by a timeout</strong> (a rate-limited 429 backoff used to stall the run for minutes with no feedback — it now simply proceeds with the stored copy). A failed quiet refresh only logs.
+    </div>
+
+    <h3 id="automation-auto-publish" class="anchor">Publication Automation</h3>
+    <p class="fileref">entrypoints/sidepanel/pages/<b>Settings.jsx</b> → <b>changePublicationMode()</b> · utils/<b>publication-settings.js</b> → <b>getPublicationMode()</b> · entrypoints/<b>background.js</b> → <b>handleAutoPublish()</b> · entrypoints/<b>dealercore-bridge.content.js</b> → <b>ingestStockEvent()</b> · entrypoints/<b>feed-bridge.content.js</b> → <b>handleFeedMessage()</b></p>
+    <p>
+      <strong>Settings → Publication Automation</strong> is a segmented control with two mutually exclusive
+      modes, stored under <code class="font-mono text-[12px]">publication_automation</code>:
+    </p>
+    <ul>
+      <li><strong>Publish manually</strong> (default) — vehicles publish only when you press Publish / Retry in the sidepanel, so existing installs are unchanged.</li>
+      <li><strong>Publish immediately</strong> — as soon as a verified DealerCore batch (<code class="font-mono text-[12px]">STOCK_FOR_ADVERTISING</code>) or feed batch is ingested, the newly arrived vehicle ids are published automatically.</li>
+    </ul>
+    <p>
+      The trigger is a <code class="font-mono text-[12px]">postMessage</code> arriving in a <em>content script</em>,
+      so the run is driven by the <strong>background worker</strong> (the sidepanel may be closed). On each
+      <code class="font-mono text-[12px]">AUTO_PUBLISH</code> the worker checks both sessions are present — a
+      DealerCore token and a Facebook <code class="font-mono text-[12px]">c_user</code> cookie — and either
+      dispatches a publish run or records an <code class="font-mono text-[12px]">automation_notice</code> skip
+      and sets the action badge.
+    </p>
+    <div class="rounded-lg border border-slate-200 p-4 bg-slate-50 text-[12.5px] leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-400">
+      <strong>Only the newly arrived vehicle(s)</strong> are queued, never the whole worklist. If a run is already
+      in progress the ids are parked in <code class="font-mono text-[12px]">pendingAutoPublish</code> and drained
+      <em>after</em> it finishes (and again on worker startup), so an automatic batch can't collide with a manual
+      one. The background reuses an existing <code class="font-mono text-[12px]">marketplace/create</code> tab when
+      one is open, otherwise it opens a new one. The sidepanel adopts runs it didn't start by watching
+      <code class="font-mono text-[12px]">storage.onChanged</code>, so progress and results still render live.
     </div>
 
     <h3 id="automation-publish" class="anchor">Publish</h3>
@@ -593,7 +627,7 @@
     </p>
 
     <h3 id="automation-sync-badges" class="anchor">Sync badges &amp; Retry</h3>
-    <p class="fileref">entrypoints/sidepanel/pages/<b>Listing.jsx</b> → <b>buildVehicles()</b> :53 · entrypoints/sidepanel/<b>Sidepanel.jsx</b> → <b>retryVehicle()</b> :573</p>
+    <p class="fileref">entrypoints/sidepanel/pages/<b>Listing.jsx</b> → <b>buildVehicles()</b> :53 · entrypoints/sidepanel/<b>Sidepanel.jsx</b> → <b>retryVehicle()</b> :618 · <b>deleteVehicle()</b> :626</p>
     <p>Every vehicle card shows a sync badge derived from the server flags and the write-back outcome:</p>
     <ul>
       <li><strong>Synced</strong> — the server row carries <code class="font-mono text-[12px]">facebook.post_id</code> and <code class="font-mono text-[12px]">timestamps.last_synced_at</code>.</li>
@@ -607,6 +641,13 @@
       → a single-id <code class="font-mono text-[12px]">startAutomation('publish', ids)</code>) and rewrites the stale stored
       result once the run completes. Sync-failed cards are <em>not</em> offered a re-publish — the listing is already live
       on Facebook, so retrying would create a duplicate.
+    </p>
+    <p>
+      Every card also carries a small <strong>×</strong> in its top-right corner that removes that vehicle from the
+      local <a href="#automation-dexie">IndexedDB</a> worklist (the <code class="font-mono text-[12px]">DELETE_VEHICLE</code>
+      background message). This is <em>local-only</em> — DealerCore keeps its own copy, so a later inventory sync can
+      bring the vehicle back. The remove button is disabled while a run is in progress so a queued item can't be
+      pulled out from under the automation.
     </p>
 
     <h3 id="automation-dexie" class="anchor">Indexed DB Database</h3>
@@ -1217,7 +1258,8 @@ npx wxt</code></pre>
     </div>
     <p class="mt-4 text-[13px]">
       The bridge matches <code class="font-mono">dealercore.com.au</code>, <code class="font-mono">*.dealercore.com.au</code>,
-      <code class="font-mono">*.test</code> and <code class="font-mono">localhost</code>. Widen the list rather
+      <code class="font-mono">*.test</code>, <code class="font-mono">localhost</code> and <code class="font-mono">127.0.0.1</code>
+      (both loopback spellings — Windows often resolves <code class="font-mono">localhost</code> to <code class="font-mono">::1</code>). Widen the list rather
       than loosening the origin checks in the message listener.
     </p>
 
@@ -1307,7 +1349,7 @@ npx wxt</code></pre>
         <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
           <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px] text-rose-600 dark:text-rose-400">invalid_client</code></td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Unknown, revoked, or not first-party.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Nova → Integrations → OAuth Clients.</td></tr>
           <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px] text-amber-600 dark:text-amber-400">invalid_request</code></td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Missing PKCE or malformed parameter.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Restore <code class="font-mono text-[12px]">code_challenge</code>.</td></tr>
-          <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Page will not load</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Chrome collapsed a real HTTP error.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Read the pre-flight status; open the URL in a tab.</td></tr>
+          <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Page will not load</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Chrome collapsed a real HTTP error — or nothing is listening on the origin.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Read the pre-flight status; open the URL in a tab. If it is a loopback origin, start the dev server and match the spelling: <code class="font-mono text-[12px]">localhost</code> may resolve to <code class="font-mono text-[12px]">::1</code> while the server binds <code class="font-mono text-[12px]">127.0.0.1</code> — use <code class="font-mono text-[12px]">http://127.0.0.1:&lt;port&gt;</code>.</td></tr>
           <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400">No authorization code</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">User closed the popup or denied consent.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Retry; confirm the client is first-party.</td></tr>
           <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Handshake completed, no token</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Response lacked a token field.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Check the endpoint response shape in devtools.</td></tr>
           <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Redirect URI mismatch</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Folder moved; extension ID changed.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Re-register the ID, or pin it with a manifest <code class="font-mono text-[12px]">key</code>.</td></tr>
