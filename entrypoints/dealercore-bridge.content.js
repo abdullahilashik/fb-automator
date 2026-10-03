@@ -3,6 +3,7 @@ import { browser } from 'wxt/browser';
 import {
   DEALERCORE_CONFIG,
   isDealerCoreHostname,
+  isLoopbackHostname,
   tokenKeyFor,
 } from '@/utils/dealercore-config';
 
@@ -45,6 +46,9 @@ async function silentHandshake(baseUrl, { force = false } = {}) {
     const token = data.token || data.access_token;
     await browser.storage.local.set({
       dealercore_base_url: baseUrl,
+      // Proof this loopback origin really answered as DealerCore; without it
+      // the sidepanel refuses a localhost base (see getDealerCoreBaseUrl).
+      dealercore_base_trusted: true,
       dealercore_signed_out: false,
       [tokenKeyFor(baseUrl)]: token,
       dealercore_session: {
@@ -101,7 +105,16 @@ export default defineContentScript({
     window.__DC_BRIDGE_READY__ = true;
 
     const baseUrl = window.location.origin;
-    await browser.storage.local.set({ dealercore_base_url: baseUrl });
+    // Loopback origins are not trusted on sight: any localhost dev server would
+    // otherwise hijack the base URL. `silentHandshake` persists a loopback
+    // origin only if it actually answers as DealerCore. Strong hostnames
+    // (dealercore.com.au / *.test) are cached immediately.
+    if (!isLoopbackHostname(window.location.hostname)) {
+      await browser.storage.local.set({
+        dealercore_base_url: baseUrl,
+        dealercore_base_trusted: true,
+      });
+    }
     // Fire-and-forget: never block page load on handshake.
     silentHandshake(baseUrl);
 

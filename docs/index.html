@@ -419,7 +419,7 @@
           <tr>
             <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">wxt.config.ts</td>
             <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Manifest: permissions and host patterns.</td>
-            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">permissions <span class="text-slate-400">:11</span> · host_permissions <span class="text-slate-400">:12</span> · optional_host_permissions <span class="text-slate-400">:19</span></td>
+            <td class="px-4 py-3 font-mono text-[11.5px] text-slate-500 dark:text-slate-400">permissions <span class="text-slate-400">:11</span> · host_permissions <span class="text-slate-400">:12</span> · optional_host_permissions <span class="text-slate-400">:23</span></td>
           </tr>
           <tr>
             <td class="px-4 py-3 font-mono text-[11.5px] text-brand-700 dark:text-brand-300">auth-guide.md</td>
@@ -464,7 +464,8 @@
           <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">token_&lt;origin&gt;</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">The Bearer token, one entry per environment (<code class="font-mono text-[12px]">token_https://dev.dealercore.com.au</code>).</td></tr>
           <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">refresh_&lt;origin&gt;</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Optional OAuth refresh token, per environment. Rotated on every successful refresh; cleared on sign-out.</td></tr>
           <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">runQueueIds</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">The per-run selection (vehicle primary keys). The only run-queue state stored outside Dexie; replaces the old <code class="font-mono text-[12px]">items</code> payload. Cleared on cancel/complete.</td></tr>
-          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">dealercore_base_url</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Active origin. Re-derived from the active tab when that tab is a DealerCore page.</td></tr>
+          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">dealercore_base_url</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Active origin. Re-derived from the active tab when that tab is a DealerCore page. Loopback origins (<code class="font-mono text-[12px]">localhost</code> / <code class="font-mono text-[12px]">127.0.0.1</code>) are adopted only after a verified handshake, so an unrelated local dev server can't hijack it.</td></tr>
+          <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">dealercore_base_trusted</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Proof flag set alongside a verified base URL. A stored loopback <code class="font-mono text-[12px]">dealercore_base_url</code> without it is discarded in favour of the default domain.</td></tr>
           <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">dealercore_session</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Cached <code class="font-mono text-[12px]">user / dealer / branch / branches / savedAt</code>. UI convenience only — never used to authorise a request.</td></tr>
           <tr><td class="px-4 py-3 text-brand-700 dark:text-brand-300">dealercore_signed_out</td><td class="px-4 py-3 font-sans text-slate-600 dark:text-slate-400">Boolean latch. Blocks the automatic handshake after an explicit sign-out.</td></tr>
         </tbody>
@@ -1217,7 +1218,8 @@ npx wxt</code></pre>
     </div>
     <p class="mt-4 text-[13px]">
       The bridge matches <code class="font-mono">dealercore.com.au</code>, <code class="font-mono">*.dealercore.com.au</code>,
-      <code class="font-mono">*.test</code> and <code class="font-mono">localhost</code>. Widen the list rather
+      <code class="font-mono">*.test</code>, <code class="font-mono">localhost</code> and <code class="font-mono">127.0.0.1</code>
+      (both loopback spellings — Windows often resolves <code class="font-mono">localhost</code> to <code class="font-mono">::1</code>). Widen the list rather
       than loosening the origin checks in the message listener.
     </p>
 
@@ -1307,7 +1309,7 @@ npx wxt</code></pre>
         <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
           <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px] text-rose-600 dark:text-rose-400">invalid_client</code></td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Unknown, revoked, or not first-party.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Nova → Integrations → OAuth Clients.</td></tr>
           <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400"><code class="font-mono text-[12px] text-amber-600 dark:text-amber-400">invalid_request</code></td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Missing PKCE or malformed parameter.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Restore <code class="font-mono text-[12px]">code_challenge</code>.</td></tr>
-          <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Page will not load</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Chrome collapsed a real HTTP error.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Read the pre-flight status; open the URL in a tab.</td></tr>
+          <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Page will not load</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Chrome collapsed a real HTTP error — or nothing is listening on the origin.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Read the pre-flight status; open the URL in a tab. If it is a loopback origin, start the dev server and match the spelling: <code class="font-mono text-[12px]">localhost</code> may resolve to <code class="font-mono text-[12px]">::1</code> while the server binds <code class="font-mono text-[12px]">127.0.0.1</code> — use <code class="font-mono text-[12px]">http://127.0.0.1:&lt;port&gt;</code>.</td></tr>
           <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400">No authorization code</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">User closed the popup or denied consent.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Retry; confirm the client is first-party.</td></tr>
           <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Handshake completed, no token</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Response lacked a token field.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Check the endpoint response shape in devtools.</td></tr>
           <tr><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Redirect URI mismatch</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Folder moved; extension ID changed.</td><td class="px-4 py-3 text-slate-600 dark:text-slate-400">Re-register the ID, or pin it with a manifest <code class="font-mono text-[12px]">key</code>.</td></tr>
