@@ -10,6 +10,26 @@ import {
 export const DC_MESSAGE_SOURCE = 'DEALERCORE_FB_EXTENSION';
 export const DC_MESSAGE_TYPE = 'STOCK_FOR_ADVERTISING';
 
+const DETECTION_REQUEST_SOURCE = 'FB_AUTOMATOR_WEBSITE';
+const DETECTION_REQUEST_TYPE = 'CHECK_EXTENSION';
+const DETECTION_RESPONSE_SOURCE = 'FB_AUTOMATOR_EXTENSION';
+const DETECTION_RESPONSE_TYPE = 'EXTENSION_STATUS';
+const DETECTION_PROTOCOL_VERSION = 1;
+
+function isDetectionRequest(data) {
+  return (
+    data?.source === DETECTION_REQUEST_SOURCE &&
+    data.type === DETECTION_REQUEST_TYPE &&
+    data.version === DETECTION_PROTOCOL_VERSION &&
+    typeof data.requestId === 'string' &&
+    data.requestId.length > 0 &&
+    data.requestId.length <= 128 &&
+    typeof data.nonce === 'string' &&
+    data.nonce.length > 0 &&
+    data.nonce.length <= 256
+  );
+}
+
 async function silentHandshake(baseUrl, { force = false } = {}) {
   try {
     // Respect an explicit sign-out: don't re-acquire a token until the user
@@ -89,11 +109,13 @@ async function ingestStockEvent(vehicle) {
 }
 
 export default defineContentScript({
+  runAt: 'document_start',
   matches: [
     'https://dealercore.com.au/*',
     'https://*.dealercore.com.au/*',
     'http://*.test/*',
     'http://localhost/*',
+    'http://127.0.0.1/*',
   ],
   async main() {
     // The sidepanel can inject this file on demand (see ensureBridgeInjected in
@@ -103,6 +125,26 @@ export default defineContentScript({
     // so bail out if this tab is already wired up.
     if (window.__DC_BRIDGE_READY__) return;
     window.__DC_BRIDGE_READY__ = true;
+
+    // Register before asynchronous startup work so detection does not depend
+    // on the DealerCore session handshake finishing.
+    window.addEventListener('message', (event) => {
+      if (event.source !== window || event.origin !== window.location.origin) return;
+      if (!isDealerCoreHostname(window.location.hostname)) return;
+      if (!isDetectionRequest(event.data)) return;
+
+      window.postMessage(
+        {
+          source: DETECTION_RESPONSE_SOURCE,
+          type: DETECTION_RESPONSE_TYPE,
+          version: DETECTION_PROTOCOL_VERSION,
+          requestId: event.data.requestId,
+          nonce: event.data.nonce,
+          installed: true,
+        },
+        event.origin,
+      );
+    });
 
     const baseUrl = window.location.origin;
     // Loopback origins are not trusted on sight: any localhost dev server would

@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FB Automator Extension Detection Test</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+      }
+      body {
+        max-width: 880px;
+        margin: 40px auto;
+        padding: 0 20px;
+      }
+      h1 {
+        line-height: 1.2;
+      }
+      .status {
+        margin: 20px 0;
+        padding: 16px;
+        border-radius: 8px;
+        background: #5552;
+      }
+      .status[data-state="available"] {
+        background: #16803c24;
+      }
+      .status[data-state="unavailable"] {
+        background: #b4231824;
+      }
+      button {
+        padding: 9px 14px;
+        cursor: pointer;
+      }
+      pre {
+        overflow: auto;
+        padding: 16px;
+        border-radius: 8px;
+        background: #5552;
+      }
+      code {
+        font:
+          13px/1.5 ui-monospace,
+          monospace;
+      }
+      .note {
+        opacity: 0.8;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>FB Automator extension detection</h1>
+    <p>
+      This page sends a nonce-bearing <code>window.postMessage</code> ping and
+      waits for the extension content-script bridge to reply.
+    </p>
+    <p class="note">
+      Test over <code>http://localhost</code>, <code>http://127.0.0.1</code>, or
+      an allowed DealerCore host, with the extension loaded and enabled. Opening
+      this file directly with <code>file://</code> will not inject the detection
+      bridge.
+    </p>
+
+    <div
+      id="status"
+      class="status"
+      data-state="checking"
+      role="status"
+      aria-live="polite"
+    >
+      Checking for the extension…
+    </div>
+    <button id="check" type="button">Check again</button>
+
+    <h2>Frontend integration code</h2>
+    <p>
+      Copy this self-contained function into the website. Call it when the page
+      loads and again when appropriate (for example, when the tab becomes
+      visible). A timeout means the extension bridge was not detected in this
+      page; it does not prove the extension is uninstalled.
+    </p>
+    <button id="copy" type="button">Copy code</button>
+    <pre><code id="snippet"></code></pre>
+
+    <script>
+      async function checkExtensionInstalled(timeoutMs = 4000) {
+        const makeToken = () => {
+          const bytes = crypto.getRandomValues(new Uint8Array(16));
+          return Array.from(bytes, (byte) =>
+            byte.toString(16).padStart(2, "0"),
+          ).join("");
+        };
+        const requestId = makeToken();
+        const nonce = makeToken();
+
+        return new Promise((resolve) => {
+          let timer;
+          let retryTimer;
+          const finish = (installed) => {
+            window.removeEventListener("message", onMessage);
+            clearTimeout(timer);
+            clearInterval(retryTimer);
+            resolve(installed);
+          };
+          const onMessage = (event) => {
+            const data = event.data;
+            if (
+              event.source !== window ||
+              event.origin !== window.location.origin ||
+              data?.source !== "FB_AUTOMATOR_EXTENSION" ||
+              data.type !== "EXTENSION_STATUS" ||
+              data.version !== 1 ||
+              data.requestId !== requestId ||
+              data.nonce !== nonce ||
+              data.installed !== true
+            ) {
+              return;
+            }
+            finish(true);
+          };
+
+          window.addEventListener("message", onMessage);
+          timer = setTimeout(
+            () => finish(false),
+            Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 4000,
+          );
+          const ping = () => {
+            window.postMessage(
+              {
+                source: "FB_AUTOMATOR_WEBSITE",
+                type: "CHECK_EXTENSION",
+                version: 1,
+                requestId,
+                nonce,
+              },
+              window.location.origin,
+            );
+          };
+          ping();
+          retryTimer = setInterval(ping, 250);
+        });
+      }
+
+      const status = document.querySelector("#status");
+      let checkInFlight;
+
+      async function updateStatus() {
+        if (checkInFlight) return checkInFlight;
+        status.dataset.state = "checking";
+        status.textContent = "Checking for the extension…";
+        checkInFlight = checkExtensionInstalled()
+          .then((installed) => {
+            status.dataset.state = installed ? "available" : "unavailable";
+            status.textContent = installed
+              ? "Extension detected in this page."
+              : "Extension bridge not detected. Check that it is enabled and this page has been reloaded.";
+            return installed;
+          })
+          .finally(() => {
+            checkInFlight = null;
+          });
+        return checkInFlight;
+      }
+
+      document.querySelector("#check").addEventListener("click", updateStatus);
+      window.addEventListener("focus", updateStatus);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") updateStatus();
+      });
+      updateStatus();
+
+      const integrationCode = `${checkExtensionInstalled.toString()}
+
+// Example: run when the page loads.
+checkExtensionInstalled().then((installed) => {
+  document.querySelector('#your-feature').disabled = !installed;
+});
+
+// Optional: refresh the status when the tab becomes active.
+window.addEventListener('focus', async () => {
+  const installed = await checkExtensionInstalled();
+  document.querySelector('#your-feature').disabled = !installed;
+});`;
+      document.querySelector("#snippet").textContent = integrationCode;
+      document
+        .querySelector("#copy")
+        .addEventListener("click", async (event) => {
+          try {
+            await navigator.clipboard.writeText(integrationCode);
+            event.currentTarget.textContent = "Copied";
+          } catch {
+            event.currentTarget.textContent =
+              "Copy unavailable — select the code";
+          }
+        });
+    </script>
+  </body>
+</html>
