@@ -448,7 +448,7 @@ export default defineContentScript({
 
         // --- MESSAGE HANDLER ---
         browser.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
-            if (request.action === "START_AUTOMATION") {
+            if (request.action === "START_AUTOMATION") {    
                 // Fresh run: clear any previous cancel request.
                 cancelRequested = false;
                 const data = await browser.storage.local.get([
